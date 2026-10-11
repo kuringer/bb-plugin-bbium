@@ -3,8 +3,6 @@
 // Target: the scrollable area the user last clicked into, else the largest
 // visible scrollable area (the chat in a thread, the page elsewhere).
 
-export const STEP = 70;
-
 let preferred: HTMLElement | null = null;
 let cached: HTMLElement | null = null;
 
@@ -54,7 +52,7 @@ export function scrollTarget(): HTMLElement | null {
 
 export type ScrollCommand = "down" | "up" | "halfDown" | "halfUp" | "top" | "bottom";
 
-export function scrollBy(command: ScrollCommand, repeat: boolean): void {
+export function scrollBy(command: ScrollCommand, step: number, repeat: boolean): void {
   const el = scrollTarget();
   if (!el) return;
   // Smooth animations stack badly under key repeat, so a held key jumps.
@@ -62,9 +60,9 @@ export function scrollBy(command: ScrollCommand, repeat: boolean): void {
   const half = Math.round(el.clientHeight / 2);
   switch (command) {
     case "down":
-      return el.scrollBy({ top: STEP, behavior });
+      return el.scrollBy({ top: step, behavior });
     case "up":
-      return el.scrollBy({ top: -STEP, behavior });
+      return el.scrollBy({ top: -step, behavior });
     case "halfDown":
       return el.scrollBy({ top: half, behavior });
     case "halfUp":

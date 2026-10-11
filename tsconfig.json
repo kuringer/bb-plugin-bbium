@@ -23,6 +23,8 @@
     "hints.ts",
     "keys.ts",
     "scroll.ts",
-    "hints.test.ts"
+    "hints.test.ts",
+    "style.ts",
+    "settings.test.ts"
   ]
 }

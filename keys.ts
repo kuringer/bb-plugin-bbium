@@ -9,13 +9,34 @@
 
 import { createHints, isEditable } from "./hints.ts";
 import { rememberScrollTarget, scrollBy, type ScrollCommand } from "./scroll.ts";
+import { buildCss, parseTheme, type Theme } from "./style.ts";
 
 export const DEFAULT_CHARS = "sadfjklewcmpgh";
 
-export type KeyConfig = { chars: string; enabled: boolean };
+export const DEFAULT_SCROLL_STEP = 70;
 
-// Read on every keystroke; app.tsx updates it from plugin settings.
-export const config: KeyConfig = { chars: DEFAULT_CHARS, enabled: true };
+export type Config = { enabled: boolean; chars: string; scrollStep: number; theme: Theme; customCss: string };
+
+// Read on every keystroke; app.tsx calls applySettings when settings change.
+const config: Config = { enabled: true, chars: DEFAULT_CHARS, scrollStep: DEFAULT_SCROLL_STEP, theme: "vimium", customCss: "" };
+let styleEl: HTMLStyleElement | null = null;
+
+/** Normalize raw plugin settings; bad values fall back to defaults. */
+export function parseSettings(values: Record<string, unknown> | undefined): Config {
+  const step = Number(values?.scrollStep);
+  return {
+    enabled: values?.vimKeys !== false,
+    chars: parseChars(values?.hintCharacters),
+    scrollStep: Number.isFinite(step) && step > 0 ? Math.min(Math.round(step), 2000) : DEFAULT_SCROLL_STEP,
+    theme: parseTheme(values?.theme),
+    customCss: typeof values?.customCss === "string" ? values.customCss : "",
+  };
+}
+
+export function applySettings(values: Record<string, unknown> | undefined): void {
+  Object.assign(config, parseSettings(values));
+  if (styleEl) styleEl.textContent = buildCss(config.theme, config.customCss);
+}
 
 /** Lowercase, unique a-z characters; falls back to the default below 2. */
 export function parseChars(raw: unknown): string {
@@ -46,6 +67,10 @@ function focusComposer(): void {
 
 export function mountKeys(signal: AbortSignal): () => void {
   const hints = createHints(() => config.chars);
+  styleEl = document.createElement("style");
+  styleEl.dataset.bbium = "";
+  styleEl.textContent = buildCss(config.theme, config.customCss);
+  document.head.appendChild(styleEl);
   let lastG = 0;
 
   function onKeyDown(e: KeyboardEvent) {
@@ -59,10 +84,10 @@ export function mountKeys(signal: AbortSignal): () => void {
     else if (key === "i") focusComposer();
     else if (key === "g") {
       if (e.timeStamp - lastG < G_TIMEOUT_MS) {
-        scrollBy("top", false);
+        scrollBy("top", config.scrollStep, false);
         lastG = 0;
       } else lastG = e.timeStamp;
-    } else if (key in SCROLL_KEYS) scrollBy(SCROLL_KEYS[key], e.repeat);
+    } else if (key in SCROLL_KEYS) scrollBy(SCROLL_KEYS[key], config.scrollStep, e.repeat);
     else handled = false;
 
     if (!handled) return;
@@ -83,5 +108,9 @@ export function mountKeys(signal: AbortSignal): () => void {
     { capture: true, signal },
   );
 
-  return () => hints.dispose();
+  return () => {
+    hints.dispose();
+    styleEl?.remove();
+    styleEl = null;
+  };
 }

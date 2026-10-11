@@ -16,5 +16,25 @@ export default async function plugin(bb: BbPluginApi) {
       description: "Letters used for labels, home row first. At least 2 unique letters a-z.",
       default: "sadfjklewcmpgh",
     },
+    scrollStep: {
+      type: "number",
+      label: "Scroll step (px)",
+      description: "Distance for j/k. d/u always scroll half a screen.",
+      default: 70,
+    },
+    theme: {
+      type: "select",
+      label: "Hint theme",
+      options: ["vimium", "bb", "mono"],
+      description: "vimium: yellow labels. bb: the app accent color, follows light/dark. mono: text color on background.",
+      default: "vimium",
+    },
+    customCss: {
+      type: "string",
+      label: "Custom CSS",
+      description: "Applied after the theme. Set --bbium-* variables on [data-bbium-root] or style .bbium-hint directly. See the bbium skill for the full list.",
+      experimental_multiline: true,
+      default: "",
+    },
   });
 }

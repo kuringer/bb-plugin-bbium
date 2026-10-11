@@ -18,7 +18,7 @@
     "shortcuts"
   ],
   "scripts": {
-    "test": "node --test hints.test.ts",
+    "test": "node --test hints.test.ts settings.test.ts",
     "typecheck": "tsc -p .",
     "build": "bb plugin build .",
     "verify": "npm run typecheck && npm test && npm run build"
@@ -34,7 +34,10 @@
       "icon": "Keyboard"
     },
     "server": "./server.ts",
-    "app": "./app.tsx"
+    "app": "./app.tsx",
+    "skills": [
+      "skills"
+    ]
   },
   "devDependencies": {
     "@get-bb/plugin-sdk": "0.6.15",

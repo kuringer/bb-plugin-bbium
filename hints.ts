@@ -1,7 +1,7 @@
 // Hint mode: label every visible clickable element, type a label to click it.
 // keys.ts opens it with `f`; Esc or a key that is not a label character closes it.
 
-const ROOT_ATTR = "data-bbium-root";
+import { ROOT_ATTR } from "./style.ts";
 
 /**
  * Prefix-free labels with the shortest mix of lengths (Vimium's algorithm):
@@ -125,17 +125,6 @@ function activate(el: HTMLElement): void {
   el.click();
 }
 
-const STYLE = `
-[${ROOT_ATTR}] { position: fixed; inset: 0; pointer-events: none; z-index: 2147483647; }
-[${ROOT_ATTR}] .bbium-hint {
-  position: absolute; padding: 1px 4px; border-radius: 3px;
-  font: 600 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em;
-  text-transform: uppercase; color: #1a1400; background: #fde77a;
-  border: 1px solid #c9a227; box-shadow: 0 1px 3px rgba(0,0,0,.35); white-space: nowrap;
-}
-[${ROOT_ATTR}] .bbium-hint .typed { opacity: .35; }
-`;
-
 type Hint = { label: string; el: HTMLElement; node: HTMLSpanElement; typed: HTMLSpanElement; rest: HTMLSpanElement };
 
 export type HintMode = {
@@ -152,10 +141,6 @@ export function createHints(getChars: () => string): HintMode {
   let hints: Hint[] = [];
   let typed = "";
   let frame = 0;
-
-  const style = document.createElement("style");
-  style.textContent = STYLE;
-  document.head.appendChild(style);
 
   function exit() {
     cancelAnimationFrame(frame);
@@ -239,9 +224,6 @@ export function createHints(getChars: () => string): HintMode {
     enter,
     exit,
     onKey,
-    dispose() {
-      exit();
-      style.remove();
-    },
+    dispose: exit,
   };
 }
