@@ -52,9 +52,14 @@ try {
 
   const before = await composerText();
   await page.keyboard.press("f");
-  const typed = await composerText();
+  let typed;
+  try {
+    typed = await composerText();
+  } finally {
+    // Focus is still in the composer: remove the test `f` from the real draft.
+    await page.keyboard.press("Backspace");
+  }
   check("f in the composer types, no hints", (await hints()) === 0 && typed === before + "f");
-  if (typed !== before) await page.keyboard.press("Backspace");
 
   // Label of the composer: hints sit at the target's top-left corner.
   await leaveEditor();

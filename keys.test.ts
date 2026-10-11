@@ -61,30 +61,37 @@ test("routeKey: ignores text fields, modifiers, IME and unknown keys", () => {
   }
 });
 
-test("pickComposer: ProseMirror first, then nearest to the user, then lowest", () => {
+test("pickComposer: ProseMirror first, then the user's column, then lowest", () => {
   assert.equal(pickComposer([]), -1);
   assert.equal(
     pickComposer([
-      { isProseMirror: true, nearness: 0, bottom: 300 },
-      { isProseMirror: false, nearness: 0, bottom: 900 },
-      { isProseMirror: true, nearness: 0, bottom: 800 },
+      { isProseMirror: true, inColumn: false, bottom: 300 },
+      { isProseMirror: false, inColumn: false, bottom: 900 },
+      { isProseMirror: true, inColumn: false, bottom: 800 },
     ]),
     2,
   );
-  // Split panes: the composer in the pane the user worked in wins.
+  // Side-by-side panes: the composer in the user's column wins.
   assert.equal(
     pickComposer([
-      { isProseMirror: true, nearness: 9, bottom: 800 },
-      { isProseMirror: true, nearness: 4, bottom: 800 },
-    ]),
-    0,
-  );
-  assert.equal(
-    pickComposer([
-      { isProseMirror: false, nearness: 12, bottom: 800 },
-      { isProseMirror: true, nearness: 4, bottom: 800 },
+      { isProseMirror: true, inColumn: false, bottom: 800 },
+      { isProseMirror: true, inColumn: true, bottom: 800 },
     ]),
     1,
   );
-  assert.equal(pickComposer([{ isProseMirror: false, nearness: 0, bottom: 100 }]), 0);
+  // An inline editor in the same column loses to the composer below it.
+  assert.equal(
+    pickComposer([
+      { isProseMirror: true, inColumn: true, bottom: 400 },
+      { isProseMirror: true, inColumn: true, bottom: 800 },
+    ]),
+    1,
+  );
+  assert.equal(
+    pickComposer([
+      { isProseMirror: false, inColumn: true, bottom: 800 },
+      { isProseMirror: true, inColumn: false, bottom: 800 },
+    ]),
+    1,
+  );
 });

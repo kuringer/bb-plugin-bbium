@@ -78,14 +78,13 @@ function isTyping(e: KeyboardEvent): boolean {
   return [target, active].some((el) => el instanceof Element && (isEditable(el) || !!el.closest(TYPEAHEAD)));
 }
 
-type EditorBox = { isProseMirror: boolean; nearness: number; bottom: number };
+type EditorBox = { isProseMirror: boolean; inColumn: boolean; bottom: number };
 
 /**
  * Index of the composer among visible editors. bb's composer is a ProseMirror
- * editor, so it beats a terminal textarea. Then the editor nearest to where the
- * user last worked (depth of the shared ancestor) wins, so split panes focus
- * their own composer. Then the lowest one: inline message editors sit above
- * the thread composer.
+ * editor, so it beats a terminal textarea. Then an editor in the column where
+ * the user last worked wins, so side-by-side panes focus their own composer.
+ * Then the lowest one: inline message editors sit above the thread composer.
  */
 export function pickComposer(editors: EditorBox[]): number {
   let best = -1;
@@ -93,25 +92,11 @@ export function pickComposer(editors: EditorBox[]): number {
     const b = editors[best];
     if (
       !b ||
-      (e.isProseMirror !== b.isProseMirror ? e.isProseMirror : e.nearness !== b.nearness ? e.nearness > b.nearness : e.bottom > b.bottom)
+      (e.isProseMirror !== b.isProseMirror ? e.isProseMirror : e.inColumn !== b.inColumn ? e.inColumn : e.bottom > b.bottom)
     )
       best = i;
   });
   return best;
-}
-
-function depth(el: Node | null): number {
-  let d = 0;
-  for (let n = el; n; n = n.parentNode) d++;
-  return d;
-}
-
-/** Depth of the deepest ancestor shared by `a` and `b`; 0 without an anchor. */
-function nearness(a: Element, b: Element | null): number {
-  if (!b) return 0;
-  let n: Node | null = a;
-  while (n && !n.contains(b)) n = n.parentNode;
-  return depth(n);
 }
 
 function focusComposer(anchor: Element | null): void {
@@ -119,12 +104,13 @@ function focusComposer(anchor: Element | null): void {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight;
   });
+  const a = anchor?.getBoundingClientRect();
+  const x = a ? a.left + a.width / 2 : NaN;
   const i = pickComposer(
-    editors.map((el) => ({
-      isProseMirror: el.classList.contains("ProseMirror"),
-      nearness: nearness(el, anchor),
-      bottom: el.getBoundingClientRect().bottom,
-    })),
+    editors.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { isProseMirror: el.classList.contains("ProseMirror"), inColumn: x >= r.left && x <= r.right, bottom: r.bottom };
+    }),
   );
   editors[i]?.focus();
 }
@@ -169,6 +155,7 @@ export function createKeys(): Keys {
     if (!e.isTrusted) return;
     hints.exit();
     cancelPin();
+    lastG = 0;
     lastPointer = e.target instanceof Element ? e.target : null;
     rememberScrollTarget(e.target);
   }
@@ -182,7 +169,13 @@ export function createKeys(): Keys {
   window.addEventListener("keydown", onKeyDown, opts);
   document.addEventListener("pointerdown", onPointerDown, opts);
   window.addEventListener("wheel", onWheel, { ...opts, passive: true });
-  window.addEventListener("blur", cancelPin, opts);
+  // A pending `g` belongs to the place it was typed in.
+  const reset = () => {
+    cancelPin();
+    lastG = 0;
+  };
+  window.addEventListener("blur", reset, opts);
+  document.addEventListener("focusin", reset, opts);
 
   return {
     apply(next) {
@@ -190,6 +183,7 @@ export function createKeys(): Keys {
       if (!config.enabled) {
         hints.exit();
         cancelPin();
+        lastG = 0;
       }
       style.textContent = buildCss(config.theme, config.customCss);
     },
