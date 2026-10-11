@@ -30,21 +30,20 @@ export function readingOrder(boxes: Box[]): number[] {
 }
 
 type Rect = { top: number; left: number; width: number; height: number; bottom: number };
-export type Spot = { x: number; y: number; mode: "corner" | "above" | "below" };
+export type Spot = { x: number; y: number; mode: "corner" | "edge" };
 
-// Room for one label row above a target (11px font, line-height 1.3, padding, border).
-const LABEL_ROOM = 20;
+// Most of a label row (11px font, line-height 1.3, padding, border) sits above y.
+const HALF_LABEL = 16;
 
 /**
  * Where a label goes. A label on the corner of a small icon button covers the
- * whole icon, so icon-only targets get the label centered above them (below
- * when there is no room at the top) and the icon stays visible.
+ * whole icon, and a label fully above it covers the line of text above. So an
+ * icon-only target gets its label centered on its top edge: the icon padding
+ * takes most of the overlap and the glyph stays visible.
  */
 export function labelSpot(rect: Rect, iconOnly: boolean): Spot {
   if (!iconOnly) return { x: Math.max(rect.left, 0), y: Math.max(rect.top, 0), mode: "corner" };
-  const x = Math.max(rect.left + rect.width / 2, 12);
-  if (rect.top - 2 >= LABEL_ROOM) return { x, y: rect.top - 2, mode: "above" };
-  return { x, y: rect.bottom + 2, mode: "below" };
+  return { x: Math.max(rect.left + rect.width / 2, 12), y: Math.max(rect.top, HALF_LABEL), mode: "edge" };
 }
 
 function isIconOnly(el: HTMLElement, rect: DOMRect): boolean {

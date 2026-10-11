@@ -79,12 +79,10 @@ test("hintKey: modifiers release, Shift and IME pass", () => {
   assert.deepEqual(hintKey(k("f", { isComposing: true }), "", "fj", ["f"]), { kind: "pass" });
 });
 
-test("labelSpot: text targets keep the corner, icons get the label above or below", () => {
+test("labelSpot: text targets keep the corner, icons get the label on their top edge", () => {
   const r = (top: number, left: number, size = 24) => ({ top, left, width: size, height: size, bottom: top + size });
   assert.deepEqual(labelSpot(r(100, -5, 200), false), { x: 0, y: 100, mode: "corner" });
-  assert.deepEqual(labelSpot(r(100, 50), true), { x: 62, y: 98, mode: "above" });
-  // No room above: below the icon.
-  assert.deepEqual(labelSpot(r(8, 50), true), { x: 62, y: 34, mode: "below" });
-  // The centered label must not leave the left edge.
-  assert.equal(labelSpot(r(100, 0, 10), true).x, 12);
+  assert.deepEqual(labelSpot(r(100, 50), true), { x: 62, y: 100, mode: "edge" });
+  // The centered label must stay inside the window.
+  assert.deepEqual(labelSpot(r(0, 0, 10), true), { x: 12, y: 16, mode: "edge" });
 });
