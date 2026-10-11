@@ -7,11 +7,11 @@
 export const ROOT_ATTR = "data-bbium-root";
 const ROOT = `[${ROOT_ATTR}]`;
 
-export const THEMES = ["vimium", "keycap", "bb", "mono"] as const;
+export const THEMES = ["keycap", "vimium", "bb", "mono"] as const;
 export type Theme = (typeof THEMES)[number];
 
 export function parseTheme(raw: unknown): Theme {
-  return THEMES.includes(raw as Theme) ? (raw as Theme) : "vimium";
+  return THEMES.includes(raw as Theme) ? (raw as Theme) : "keycap";
 }
 
 const BASE = `

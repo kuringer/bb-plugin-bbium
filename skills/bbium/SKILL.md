@@ -25,7 +25,7 @@ Changes apply live in every open bb window. No reload.
 | `vimKeys`        | boolean | `true`           | Turn all keys on or off                                                                                                                                              |
 | `hintCharacters` | string  | `sadfjklewcmpgh` | Label letters, home row first. Non a-z letters are dropped; fewer than 2 = default                                                                                   |
 | `scrollStep`     | number  | `70`             | Pixels per `j`/`k` (max 2000)                                                                                                                                        |
-| `theme`          | select  | `vimium`         | `vimium` yellow, `keycap` bb-style key chips (typed letters in the accent color), `bb` app accent, `mono` text color on background; all but vimium follow light/dark |
+| `theme`          | select  | `keycap`         | `keycap` bb-style key chips (typed letters in the accent color), `vimium` yellow, `bb` app accent, `mono` text color on background; all but vimium follow light/dark |
 | `customCss`      | string  | empty            | CSS appended after the theme, so it wins                                                                                                                             |
 
 ## Style hints with customCss

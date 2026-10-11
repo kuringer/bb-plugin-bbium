@@ -8,7 +8,7 @@ test("parseSettings: defaults for missing values", () => {
     enabled: true,
     chars: DEFAULT_CHARS,
     scrollStep: DEFAULT_SCROLL_STEP,
-    theme: "vimium",
+    theme: "keycap",
     customCss: "",
   });
 });
@@ -21,7 +21,7 @@ test("parseSettings: keeps valid values", () => {
 test("parseSettings: rejects bad values", () => {
   const s = parseSettings({ scrollStep: -5, theme: "neon", customCss: 42 });
   assert.equal(s.scrollStep, DEFAULT_SCROLL_STEP);
-  assert.equal(s.theme, "vimium");
+  assert.equal(s.theme, "keycap");
   assert.equal(s.customCss, "");
   assert.equal(parseSettings({ scrollStep: "999999" }).scrollStep, 2000);
 });
