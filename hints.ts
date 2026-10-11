@@ -139,25 +139,46 @@ function sameCorner(a: DOMRect, b: DOMRect): boolean {
   return Math.abs(a.left - b.left) < 3 && Math.abs(a.top - b.top) < 3;
 }
 
-// Hover-only controls (message actions, sidebar row actions) sit in an
-// `opacity: 0` wrapper. They pass the hit test, so they get a label, but the
-// user cannot see what the label does. Show them while hints are open.
-function revealHidden(els: HTMLElement[]): () => void {
-  const saved: { el: HTMLElement; value: string; priority: string }[] = [];
+// A hover toolbar is small. A larger transparent element is a hidden panel or
+// a fading overlay: making it hittable would cover the page.
+const HOVER_BAR_MAX = { width: 480, height: 120 };
+
+/**
+ * Hover-only controls (message actions, sidebar Snooze and Settle) sit in an
+ * `opacity: 0` wrapper, often also `pointer-events: none`. Without help they
+ * fail the hit test or get a label the user cannot read. Show them and make
+ * them hittable while hints are open; the returned function restores them.
+ */
+function revealHoverControls(): () => void {
+  const saved: { el: HTMLElement; prop: string; value: string; priority: string }[] = [];
+  const set = (el: HTMLElement, prop: string, value: string) => {
+    saved.push({ el, prop, value: el.style.getPropertyValue(prop), priority: el.style.getPropertyPriority(prop) });
+    el.style.setProperty(prop, value, "important");
+  };
+  // Read everything first, then write: a style write between reads forces a
+  // fresh style and layout pass on the next read.
+  const bars: { el: HTMLElement; inert: boolean }[] = [];
   const checked = new Set<Element>();
-  for (const start of els) {
+  for (const start of document.body.querySelectorAll<HTMLElement>(CLICKABLE)) {
+    if (start.closest(`[${ROOT_ATTR}]`) || !onScreen(start.getBoundingClientRect())) continue;
     // Ancestors above an already checked element are checked too.
     for (let el: HTMLElement | null = start; el && el !== document.body && !checked.has(el); el = el.parentElement) {
       checked.add(el);
-      if (parseFloat(getComputedStyle(el).opacity) >= 0.1) continue;
-      saved.push({ el, value: el.style.getPropertyValue("opacity"), priority: el.style.getPropertyPriority("opacity") });
-      el.style.setProperty("opacity", "1", "important");
+      const style = getComputedStyle(el);
+      if (parseFloat(style.opacity) >= 0.1) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.width > HOVER_BAR_MAX.width || rect.height > HOVER_BAR_MAX.height) continue;
+      bars.push({ el, inert: style.pointerEvents === "none" });
     }
   }
+  for (const { el, inert } of bars) {
+    set(el, "opacity", "1");
+    if (inert) set(el, "pointer-events", "auto");
+  }
   return () => {
-    for (const { el, value, priority } of saved) {
-      if (value) el.style.setProperty("opacity", value, priority);
-      else el.style.removeProperty("opacity");
+    for (const { el, prop, value, priority } of saved.reverse()) {
+      if (value) el.style.setProperty(prop, value, priority);
+      else el.style.removeProperty(prop);
     }
   };
 }
@@ -255,9 +276,9 @@ export function createHints(getChars: () => string): HintMode {
 
   function enter() {
     exit();
+    unreveal = revealHoverControls();
     const targets = collectTargets();
-    if (targets.length === 0) return;
-    unreveal = revealHidden(targets.map((t) => t.el));
+    if (targets.length === 0) return exit();
     const labels = makeLabels(targets.length, getChars());
     root = document.createElement("div");
     root.setAttribute(ROOT_ATTR, "");
@@ -317,8 +338,9 @@ export function createHints(getChars: () => string): HintMode {
     }
     if (step.kind === "activate") {
       const el = live.find((h) => h.label === step.label)!.el;
-      exit();
+      // Activate first: a revealed control fails the live check once hidden again.
       activate(el);
+      exit();
     }
   }
 

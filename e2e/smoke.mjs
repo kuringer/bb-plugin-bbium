@@ -46,7 +46,7 @@ try {
   await page.keyboard.press("Escape");
   check("Esc closes hints", (await hints()) === 0);
   const revealed = await page.evaluate(
-    () => [...document.querySelectorAll("*")].filter((e) => e.style.getPropertyPriority("opacity") === "important").length,
+    () => [...document.querySelectorAll("*")].filter((e) => e.style.getPropertyPriority("opacity") === "important" || e.style.getPropertyPriority("pointer-events") === "important").length,
   );
   check("hover-only controls are hidden again", revealed === 0, `${revealed} still shown`);
 
