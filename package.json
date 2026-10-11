@@ -31,7 +31,7 @@
     "name": "Bbium",
     "description": "Vimium-style keys: f to click by label, j/k and d/u to scroll, i for the composer.",
     "branding": {
-      "icon": "Keyboard"
+      "icon": "./icons/bbium.svg"
     },
     "server": "./server.ts",
     "app": "./app.tsx",
