@@ -20,13 +20,13 @@ bb plugin config bbium unset customCss         # back to default
 
 Changes apply live in every open bb window. No reload.
 
-| Key              | Type    | Default          | Meaning                                                                                |
-| ---------------- | ------- | ---------------- | -------------------------------------------------------------------------------------- |
-| `vimKeys`        | boolean | `true`           | Turn all keys on or off                                                                |
-| `hintCharacters` | string  | `sadfjklewcmpgh` | Label letters, home row first. Non a-z letters are dropped; fewer than 2 = default     |
-| `scrollStep`     | number  | `70`             | Pixels per `j`/`k` (max 2000)                                                          |
-| `theme`          | select  | `vimium`         | `vimium` yellow, `bb` app accent (follows light/dark), `mono` text color on background |
-| `customCss`      | string  | empty            | CSS appended after the theme, so it wins                                               |
+| Key              | Type    | Default          | Meaning                                                                                                                                                              |
+| ---------------- | ------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vimKeys`        | boolean | `true`           | Turn all keys on or off                                                                                                                                              |
+| `hintCharacters` | string  | `sadfjklewcmpgh` | Label letters, home row first. Non a-z letters are dropped; fewer than 2 = default                                                                                   |
+| `scrollStep`     | number  | `70`             | Pixels per `j`/`k` (max 2000)                                                                                                                                        |
+| `theme`          | select  | `vimium`         | `vimium` yellow, `keycap` bb-style key chips (typed letters in the accent color), `bb` app accent, `mono` text color on background; all but vimium follow light/dark |
+| `customCss`      | string  | empty            | CSS appended after the theme, so it wins                                                                                                                             |
 
 ## Style hints with customCss
 
@@ -47,6 +47,8 @@ Set variables on `[data-bbium-root]`. Each one has a default, so set only what c
 | `--bbium-text-transform`                | `uppercase`                 | `none` shows lowercase labels                   |
 | `--bbium-opacity`                       | `1`                         | Whole label opacity                             |
 | `--bbium-typed-opacity`                 | `.35`                       | Opacity of letters already typed                |
+| `--bbium-typed-color`                   | `inherit`                   | Color of letters already typed                  |
+| `--bbium-border-bottom`                 | `1px`                       | Bottom border width (keycap edge)               |
 | `--bbium-offset-x` / `--bbium-offset-y` | `0px`                       | Shift labels from the element's top-left corner |
 
 Insert mode: while the composer has focus, keys type text. The composer then gets a ring and an `INSERT · ESC` badge. Set these variables on `[data-promptbox]` (not on `[data-bbium-root]`):

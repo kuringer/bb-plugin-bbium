@@ -37,13 +37,13 @@ bb plugin config bbium set customCss '[data-bbium-root] { --bbium-font-size: 13p
 
 Changes apply live, no reload.
 
-| Setting          | Default          | Meaning                                                       |
-| ---------------- | ---------------- | ------------------------------------------------------------- |
-| `vimKeys`        | `true`           | Turn all keys on or off                                       |
-| `hintCharacters` | `sadfjklewcmpgh` | Label letters, home row first                                 |
-| `scrollStep`     | `70`             | Pixels per `j`/`k`                                            |
-| `theme`          | `vimium`         | `vimium` yellow, `bb` app accent (follows light/dark), `mono` |
-| `customCss`      | empty            | CSS applied after the theme                                   |
+| Setting          | Default          | Meaning                                                                                                  |
+| ---------------- | ---------------- | -------------------------------------------------------------------------------------------------------- |
+| `vimKeys`        | `true`           | Turn all keys on or off                                                                                  |
+| `hintCharacters` | `sadfjklewcmpgh` | Label letters, home row first                                                                            |
+| `scrollStep`     | `70`             | Pixels per `j`/`k`                                                                                       |
+| `theme`          | `vimium`         | `vimium` yellow, `keycap` bb-style key chips, `bb` app accent, `mono` (all but vimium follow light/dark) |
+| `customCss`      | empty            | CSS applied after the theme                                                                              |
 
 Hint styling uses CSS variables (`--bbium-bg`, `--bbium-fg`, `--bbium-font-size`, `--bbium-offset-y`...) on `[data-bbium-root]`. The full list is in [`skills/bbium/SKILL.md`](skills/bbium/SKILL.md). bb loads that skill for agents, so "make the hints bigger and blue" works in any thread.
 

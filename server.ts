@@ -25,8 +25,8 @@ export default async function plugin(bb: BbPluginApi) {
     theme: {
       type: "select",
       label: "Hint theme",
-      options: ["vimium", "bb", "mono"],
-      description: "vimium: yellow labels. bb: the app accent color, follows light/dark. mono: text color on background.",
+      options: ["vimium", "keycap", "bb", "mono"],
+      description: "vimium: yellow labels. keycap: bb-style key chips with the typed letters in the accent color. bb: the app accent color, follows light/dark. mono: text color on background.",
       default: "vimium",
     },
     customCss: {

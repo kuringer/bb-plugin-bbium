@@ -7,7 +7,7 @@
 export const ROOT_ATTR = "data-bbium-root";
 const ROOT = `[${ROOT_ATTR}]`;
 
-export const THEMES = ["vimium", "bb", "mono"] as const;
+export const THEMES = ["vimium", "keycap", "bb", "mono"] as const;
 export type Theme = (typeof THEMES)[number];
 
 export function parseTheme(raw: unknown): Theme {
@@ -30,6 +30,7 @@ ${ROOT} .bbium-hint {
   color: var(--bbium-fg);
   background: var(--bbium-bg);
   border: 1px solid var(--bbium-border);
+  border-bottom-width: var(--bbium-border-bottom, 1px);
   box-shadow: var(--bbium-shadow, 0 1px 3px rgba(0,0,0,.35));
   opacity: var(--bbium-opacity, 1);
   white-space: nowrap;
@@ -37,11 +38,14 @@ ${ROOT} .bbium-hint {
 ${ROOT} .bbium-hint.edge {
   transform: translate(calc(-50% + var(--bbium-offset-x, 0px)), calc(-80% + var(--bbium-offset-y, 0px)));
 }
-${ROOT} .bbium-hint .typed { opacity: var(--bbium-typed-opacity, .35); }
+${ROOT} .bbium-hint .typed { opacity: var(--bbium-typed-opacity, .35); color: var(--bbium-typed-color, inherit); }
 `;
 
 const THEME_VARS: Record<Theme, string> = {
   vimium: "--bbium-bg: #fde77a; --bbium-fg: #1a1400; --bbium-border: #c9a227;",
+  // bb's own key chip look: card surface, bb border, a keycap bottom edge.
+  keycap:
+    "--bbium-bg: var(--card, #fff); --bbium-fg: var(--foreground, #151419); --bbium-border: color-mix(in oklab, var(--foreground, #151419) 22%, transparent); --bbium-border-bottom: 2px; --bbium-shadow: 0 2px 6px rgba(0,0,0,.14); --bbium-font: var(--font-mono, ui-monospace, monospace); --bbium-font-weight: 600; --bbium-radius: 5px; --bbium-padding: 0 5px; --bbium-typed-color: var(--primary, #cc4710); --bbium-typed-opacity: 1;",
   // bb's own tokens, so the preset follows the app theme and light/dark mode.
   bb: "--bbium-bg: var(--primary, #cc4710); --bbium-fg: var(--primary-foreground, #fff); --bbium-border: transparent; --bbium-font: var(--font-mono, ui-monospace, monospace); --bbium-radius: var(--radius, 4px);",
   mono: "--bbium-bg: var(--foreground, #151419); --bbium-fg: var(--background, #fbfaf8); --bbium-border: transparent; --bbium-shadow: none; --bbium-font: var(--font-mono, ui-monospace, monospace);",
@@ -75,6 +79,7 @@ ${COMPOSER}:focus-within::after {
 
 const INSERT_VARS: Record<Theme, string> = {
   vimium: "--bbium-insert-color: #e0b400; --bbium-insert-fg: #1a1400;",
+  keycap: "--bbium-insert-color: var(--ring, #f36525); --bbium-insert-fg: var(--primary-foreground, #fff);",
   bb: "--bbium-insert-color: var(--primary, #cc4710); --bbium-insert-fg: var(--primary-foreground, #fff);",
   mono: "--bbium-insert-color: var(--foreground, #151419); --bbium-insert-fg: var(--background, #fbfaf8);",
 };
