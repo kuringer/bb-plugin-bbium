@@ -17,6 +17,11 @@ In hint mode, `Backspace` removes the last letter and `Esc` closes hints. Hints 
 
 - **Vim keys** - turn all keys off.
 - **Hint characters** - the letters used for labels, home row first.
+- **Scroll step** - pixels per `j` and `k`.
+- **Hint theme** - Vimium yellow, the bb accent color that follows light and dark mode, or mono.
+- **Custom CSS** - restyle labels with CSS variables for color, font, size, radius and position.
+
+Every setting also works through `bb plugin config bbium`, and the plugin ships a skill that lists every style variable. Ask an agent in any thread to restyle the hints. Changes apply live.
 
 ## Limits
 

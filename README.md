@@ -28,10 +28,24 @@ Scroll keys move the area you last clicked into, else the largest scrollable are
 
 ## Settings
 
-In bb: Plugins > Bbium.
+In bb: Plugins > Bbium, or from the CLI (an agent can do this for you):
 
-- **Vim keys** - turn all keys off.
-- **Hint characters** - letters for labels, home row first. Default `sadfjklewcmpgh`.
+```sh
+bb plugin config bbium set theme bb
+bb plugin config bbium set customCss '[data-bbium-root] { --bbium-font-size: 13px; }'
+```
+
+Changes apply live, no reload.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `vimKeys` | `true` | Turn all keys on or off |
+| `hintCharacters` | `sadfjklewcmpgh` | Label letters, home row first |
+| `scrollStep` | `70` | Pixels per `j`/`k` |
+| `theme` | `vimium` | `vimium` yellow, `bb` app accent (follows light/dark), `mono` |
+| `customCss` | empty | CSS applied after the theme |
+
+Hint styling uses CSS variables (`--bbium-bg`, `--bbium-fg`, `--bbium-font-size`, `--bbium-offset-y`...) on `[data-bbium-root]`. The full list is in [`skills/bbium/SKILL.md`](skills/bbium/SKILL.md). bb loads that skill for agents, so "make the hints bigger and blue" works in any thread.
 
 ## How it works
 
@@ -48,7 +62,7 @@ bb plugin dev         # rebuild and reload on save
 npm run verify        # typecheck, tests, build
 ```
 
-Logic: [`keys.ts`](keys.ts) (key routing), [`hints.ts`](hints.ts), [`scroll.ts`](scroll.ts). Tests: [`hints.test.ts`](hints.test.ts).
+Logic: [`keys.ts`](keys.ts) (key routing, settings), [`hints.ts`](hints.ts), [`scroll.ts`](scroll.ts), [`style.ts`](style.ts). Tests: [`hints.test.ts`](hints.test.ts).
 
 ## License
 
