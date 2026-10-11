@@ -101,32 +101,62 @@ function isLive(el: HTMLElement): boolean {
   return onScreen(rect) && isUncovered(el, rect);
 }
 
-// One pass over the DOM. The cheap geometry check runs first, so
-// getComputedStyle and the hit test only run for on-screen elements.
+type Clip = { top: number; left: number; bottom: number; right: number };
+
+function outside(r: DOMRect, c: Clip): boolean {
+  // A zero-size box (display: contents, empty wrappers) says nothing about its children.
+  if (r.width === 0 && r.height === 0) return false;
+  return r.bottom < c.top || r.top > c.bottom || r.right < c.left || r.left > c.right;
+}
+
+/**
+ * One recursive pass over the DOM. A subtree that lies outside the visible part
+ * of its scroll container is skipped whole: bb's sidebar keeps every thread
+ * row in the DOM (16k nodes with 400 threads), and only a few are on screen.
+ * Styles that make an element unclickable are checked before the hit test,
+ * which costs ~0.5 ms per call on a large page.
+ */
+// ponytail: an absolute or fixed child of a skipped row that sits on screen
+// is missed; bb renders menus and popovers in portals, so none exist today.
 function collectTargets(): { el: HTMLElement; rect: DOMRect }[] {
-  const cursors = new Map<Element, string>();
-  const cursor = (el: Element) => {
-    let c = cursors.get(el);
-    if (c === undefined) cursors.set(el, (c = getComputedStyle(el).cursor));
-    return c;
-  };
   const found: { el: HTMLElement; rect: DOMRect }[] = [];
-  for (const el of document.body.querySelectorAll("*")) {
+  const viewport: Clip = { top: 0, left: 0, bottom: innerHeight, right: innerWidth };
+
+  const visit = (el: Element, parentClip: Clip, parentPointer: boolean, inClickable: boolean) => {
     // SVG and MathML have no click(); their clickable HTML parent gets the label.
-    if (!(el instanceof HTMLElement) || el.hasAttribute(ROOT_ATTR)) continue;
+    if (!(el instanceof HTMLElement) || el.hasAttribute(ROOT_ATTR)) return;
+    const style = getComputedStyle(el);
+    if (style.display === "none") return;
+    const clip = style.position === "fixed" ? viewport : parentClip;
     const rect = el.getBoundingClientRect();
-    if (!onScreen(rect)) continue;
-    if (el.matches(CLICKABLE)) {
-      if (isDisabled(el)) continue;
-    } else {
-      // cursor is inherited, so only take the top of each pointer region, and
-      // skip regions inside a semantic clickable.
-      if (cursor(el) !== "pointer") continue;
-      const parent = el.parentElement;
-      if (parent && (cursor(parent) === "pointer" || parent.closest(CLICKABLE))) continue;
+    if (outside(rect, clip)) return;
+    const pointer = style.cursor === "pointer";
+    const clickable = el.matches(CLICKABLE);
+    if (
+      onScreen(rect) &&
+      style.pointerEvents !== "none" &&
+      style.visibility === "visible" &&
+      (clickable
+        ? !isDisabled(el)
+        : // cursor is inherited, so only take the top of each pointer region,
+          // and skip regions inside a semantic clickable.
+          pointer && !parentPointer && !inClickable) &&
+      isUncovered(el, rect)
+    ) {
+      found.push({ el, rect });
     }
-    if (isUncovered(el, rect)) found.push({ el, rect });
-  }
+    let childClip = clip;
+    if (style.overflowX !== "visible" || style.overflowY !== "visible") {
+      childClip = {
+        top: Math.max(clip.top, rect.top),
+        left: Math.max(clip.left, rect.left),
+        bottom: Math.min(clip.bottom, rect.bottom),
+        right: Math.min(clip.right, rect.right),
+      };
+    }
+    for (const child of el.children) visit(child, childClip, pointer, inClickable || clickable);
+  };
+  for (const child of document.body.children) visit(child, viewport, false, false);
   // Drop a wrapper that starts at the same spot as a target inside it
   // (e.g. <a><button/></a>) to avoid two stacked labels.
   const deduped = found.filter(
