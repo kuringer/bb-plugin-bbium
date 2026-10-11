@@ -59,8 +59,7 @@ function onScreen(rect: DOMRect): boolean {
   return rect.width >= 2 && rect.height >= 2 && rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth;
 }
 
-function isVisible(el: HTMLElement, rect: DOMRect): boolean {
-  if (!onScreen(rect)) return false;
+function isUncovered(el: HTMLElement, rect: DOMRect): boolean {
   // Occlusion check: a modal or overlay above the element wins the hit test.
   const x = Math.min(Math.max(rect.left + rect.width / 2, 0), innerWidth - 1);
   const y = Math.min(Math.max(rect.top + rect.height / 2, 0), innerHeight - 1);
@@ -68,35 +67,41 @@ function isVisible(el: HTMLElement, rect: DOMRect): boolean {
   return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
 }
 
-function collectTargets(): HTMLElement[] {
-  const found = new Set<HTMLElement>();
-  for (const el of document.querySelectorAll<HTMLElement>(CLICKABLE)) {
-    if (el.closest(`[${ROOT_ATTR}]`)) continue;
-    if ((el as HTMLButtonElement).disabled || el.getAttribute("aria-disabled") === "true") continue;
-    found.add(el);
-  }
-  // cursor is inherited, so only take the top of each pointer region, and
-  // skip regions inside an element we already have.
+// One pass over the DOM. The cheap geometry check runs first, so
+// getComputedStyle and the hit test only run for on-screen elements.
+function collectTargets(): { el: HTMLElement; rect: DOMRect }[] {
+  const cursors = new Map<Element, string>();
+  const cursor = (el: Element) => {
+    let c = cursors.get(el);
+    if (c === undefined) cursors.set(el, (c = getComputedStyle(el).cursor));
+    return c;
+  };
+  const found: { el: HTMLElement; rect: DOMRect }[] = [];
   for (const el of document.body.querySelectorAll<HTMLElement>("*")) {
-    if (found.has(el) || el.closest(`[${ROOT_ATTR}]`)) continue;
-    if (getComputedStyle(el).cursor !== "pointer") continue;
-    const parent = el.parentElement;
-    if (parent && getComputedStyle(parent).cursor === "pointer") continue;
-    if (parent?.closest(CLICKABLE)) continue;
-    found.add(el);
+    if (el.hasAttribute(ROOT_ATTR)) continue;
+    const rect = el.getBoundingClientRect();
+    if (!onScreen(rect)) continue;
+    if (el.matches(CLICKABLE)) {
+      if ((el as HTMLButtonElement).disabled || el.getAttribute("aria-disabled") === "true") continue;
+    } else {
+      // cursor is inherited, so only take the top of each pointer region, and
+      // skip regions inside a semantic clickable.
+      if (cursor(el) !== "pointer") continue;
+      const parent = el.parentElement;
+      if (parent && (cursor(parent) === "pointer" || parent.closest(CLICKABLE))) continue;
+    }
+    if (isUncovered(el, rect)) found.push({ el, rect });
   }
-  const visible = [...found].filter((el) => isVisible(el, el.getBoundingClientRect()));
   // Drop a wrapper that starts at the same spot as a target inside it
   // (e.g. <a><button/></a>) to avoid two stacked labels.
-  const deduped = visible.filter((el) => !visible.some((other) => other !== el && el.contains(other) && sameCorner(el, other)));
-  const order = readingOrder(deduped.map((el) => el.getBoundingClientRect()));
-  return order.map((i) => deduped[i]);
+  const deduped = found.filter(
+    (a) => !found.some((b) => b !== a && a.el.contains(b.el) && sameCorner(a.rect, b.rect)),
+  );
+  return readingOrder(deduped.map((t) => t.rect)).map((i) => deduped[i]);
 }
 
-function sameCorner(a: HTMLElement, b: HTMLElement): boolean {
-  const ra = a.getBoundingClientRect();
-  const rb = b.getBoundingClientRect();
-  return Math.abs(ra.left - rb.left) < 3 && Math.abs(ra.top - rb.top) < 3;
+function sameCorner(a: DOMRect, b: DOMRect): boolean {
+  return Math.abs(a.left - b.left) < 3 && Math.abs(a.top - b.top) < 3;
 }
 
 function activate(el: HTMLElement): void {
@@ -160,7 +165,7 @@ export function createHints(getChars: () => string): HintMode {
     root = document.createElement("div");
     root.setAttribute(ROOT_ATTR, "");
     root.setAttribute("aria-hidden", "true");
-    hints = targets.map((el, i) => {
+    hints = targets.map(({ el }, i) => {
       const node = document.createElement("span");
       node.className = "bbium-hint";
       const typedNode = node.appendChild(document.createElement("span"));

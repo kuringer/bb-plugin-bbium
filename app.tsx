@@ -1,21 +1,28 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { definePluginApp, useSettings } from "@get-bb/plugin-sdk/app";
-import { applySettings, mountKeys } from "./keys.ts";
+import { createKeys, parseSettings, type Keys } from "./keys.ts";
 
-// Content scripts get no React context, so this invisible overlay pushes the
-// plugin settings into the key handler and the hint stylesheet on change.
-function SettingsBridge() {
+// An app overlay instead of a content script: it mounts once per bb window,
+// outside route layouts, and has the React context that useSettings needs.
+// It renders nothing; it owns the key handler's lifetime.
+function KeyboardControl() {
   const { values } = useSettings();
-  useEffect(() => applySettings(values), [values]);
+  const keys = useRef<Keys | null>(null);
+
+  useEffect(() => {
+    const k = createKeys();
+    keys.current = k;
+    return () => {
+      k.dispose();
+      keys.current = null;
+    };
+  }, []);
+
+  useEffect(() => keys.current?.apply(parseSettings(values)), [values]);
+
   return null;
 }
 
 export default definePluginApp((app) => {
-  app.contentScripts.register({
-    id: "vim-keys",
-    mount({ signal }) {
-      return mountKeys(signal);
-    },
-  });
-  app.slots.experimental_appOverlay({ id: "settings-bridge", component: SettingsBridge });
+  app.slots.experimental_appOverlay({ id: "keyboard-control", component: KeyboardControl });
 });

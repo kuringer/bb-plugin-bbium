@@ -52,9 +52,38 @@ export function scrollTarget(): HTMLElement | null {
 
 export type ScrollCommand = "down" | "up" | "halfDown" | "halfUp" | "top" | "bottom";
 
+const PIN_MS = 1000;
+let pin = 0;
+
+// The chat list sticks to the bottom while an agent writes and is
+// virtualized: rows above get measured as they come into view, the list
+// grows and bb pulls it back down. A user scroll is a wheel event, so an
+// upward command sends one (it does not scroll by itself) to release that.
+function releaseStick(el: HTMLElement): void {
+  el.dispatchEvent(new WheelEvent("wheel", { deltaY: -1, bubbles: true, cancelable: true }));
+}
+
+// Jump to the top and hold it while the rows above are measured.
+function pinTop(el: HTMLElement): void {
+  const until = performance.now() + PIN_MS;
+  const tick = () => {
+    if (el.scrollTop !== 0) el.scrollTo({ top: 0 });
+    if (performance.now() < until) pin = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+/** Stop holding the top (a new command or a real user scroll). */
+export function cancelPin(): void {
+  cancelAnimationFrame(pin);
+}
+
 export function scrollBy(command: ScrollCommand, step: number, repeat: boolean): void {
+  cancelPin();
   const el = scrollTarget();
   if (!el) return;
+  if (command === "up" || command === "halfUp" || command === "top") releaseStick(el);
+  if (command === "top") return pinTop(el);
   // Smooth animations stack badly under key repeat, so a held key jumps.
   const behavior: ScrollBehavior = repeat ? "auto" : "smooth";
   const half = Math.round(el.clientHeight / 2);
@@ -67,8 +96,6 @@ export function scrollBy(command: ScrollCommand, step: number, repeat: boolean):
       return el.scrollBy({ top: half, behavior });
     case "halfUp":
       return el.scrollBy({ top: -half, behavior });
-    case "top":
-      return el.scrollTo({ top: 0, behavior });
     case "bottom":
       return el.scrollTo({ top: el.scrollHeight, behavior });
   }

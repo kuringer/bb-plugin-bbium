@@ -49,7 +49,7 @@ Hint styling uses CSS variables (`--bbium-bg`, `--bbium-fg`, `--bbium-font-size`
 
 ## How it works
 
-A trusted frontend content script reads the bb app DOM. It labels semantic controls (links, buttons, inputs, ARIA roles) and the outermost `cursor: pointer` elements that are visible and not covered. Activation sends the full pointer sequence, so Radix menus and selects open too.
+An app overlay (`experimental_appOverlay`, [`app.tsx`](app.tsx)) mounts once per bb window, renders nothing and installs one capture-phase key handler. It reads settings live with `useSettings`. Hint mode labels semantic controls (links, buttons, inputs, ARIA roles) and the outermost `cursor: pointer` elements that are visible and not covered. Activation sends the full pointer sequence, so Radix menus and selects open too.
 
 Limits: content inside the built-in Browser panel (an iframe) gets no hints. Hint detection depends on bb's DOM, so a bb update can change which elements get a label.
 
@@ -60,9 +60,10 @@ npm install
 bb plugin install .   # path install
 bb plugin dev         # rebuild and reload on save
 npm run verify        # typecheck, tests, build
+npm run e2e           # smoke test against a running bb (BB_URL, default http://localhost:38886; BB_THREAD=<thread path> adds scroll checks; needs Chrome)
 ```
 
-Logic: [`keys.ts`](keys.ts) (key routing, settings), [`hints.ts`](hints.ts), [`scroll.ts`](scroll.ts), [`style.ts`](style.ts). Tests: [`hints.test.ts`](hints.test.ts).
+Logic: [`keys.ts`](keys.ts) (key routing, settings), [`hints.ts`](hints.ts), [`scroll.ts`](scroll.ts), [`style.ts`](style.ts). Tests: [`hints.test.ts`](hints.test.ts), [`keys.test.ts`](keys.test.ts), [`settings.test.ts`](settings.test.ts), [`e2e/smoke.mjs`](e2e/smoke.mjs).
 
 ## License
 

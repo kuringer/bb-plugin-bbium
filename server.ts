@@ -1,4 +1,4 @@
-// bb-plugin-bbium: keyboard behavior lives in the frontend content script (keys.ts).
+// bb-plugin-bbium: keyboard behavior lives in the frontend app overlay (app.tsx, keys.ts).
 // The server only declares settings; the frontend reads them via useSettings.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 
