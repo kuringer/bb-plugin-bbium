@@ -1,30 +1,13 @@
-// Vimium-style hint mode for the bb app shell.
-//
-// Trigger: `f` when focus is not in a text field (can be turned off), or
-// Alt+F from anywhere - the composer usually holds focus, so a plain `f`
-// would be typed there. Then type the label next to an element to click or
-// focus it. Esc, Alt+F again, or a key that is not a label character cancels.
+// Hint mode: label every visible clickable element, type a label to click it.
+// keys.ts opens it with `f`; Esc or a key that is not a label character closes it.
 
-export const DEFAULT_CHARS = "sadfjklewcmpgh";
 const ROOT_ATTR = "data-bbium-root";
-
-export type HintConfig = { chars: string; plainF: boolean };
-
-// Read by the key handler on every keystroke; app.tsx updates it from settings.
-export const config: HintConfig = { chars: DEFAULT_CHARS, plainF: true };
-
-/** Lowercase, unique a-z characters; falls back to the default below 2. */
-export function parseChars(raw: unknown): string {
-  if (typeof raw !== "string") return DEFAULT_CHARS;
-  const unique = [...new Set(raw.toLowerCase().replace(/[^a-z]/g, ""))].join("");
-  return unique.length >= 2 ? unique : DEFAULT_CHARS;
-}
 
 /**
  * Prefix-free labels with the shortest mix of lengths (Vimium's algorithm):
  * with 14 characters and 20 targets, most labels stay one character long.
  */
-export function makeLabels(count: number, chars = DEFAULT_CHARS): string[] {
+export function makeLabels(count: number, chars: string): string[] {
   if (count <= 0) return [];
   const hints = [""];
   let offset = 0;
@@ -61,7 +44,7 @@ const CLICKABLE = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
-function isEditable(el: Element | null): boolean {
+export function isEditable(el: Element | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
   if (el.isContentEditable) return true;
   if (el.tagName === "TEXTAREA" || el.tagName === "SELECT") return true;
@@ -155,8 +138,17 @@ const STYLE = `
 
 type Hint = { label: string; el: HTMLElement; node: HTMLSpanElement; typed: HTMLSpanElement; rest: HTMLSpanElement };
 
-export function mountHints(signal: AbortSignal): () => void {
+export type HintMode = {
+  active(): boolean;
+  enter(): void;
+  exit(): void;
+  onKey(e: KeyboardEvent): void;
+  dispose(): void;
+};
+
+export function createHints(getChars: () => string): HintMode {
   let root: HTMLDivElement | null = null;
+  let session: AbortController | null = null;
   let hints: Hint[] = [];
   let typed = "";
   let frame = 0;
@@ -167,6 +159,8 @@ export function mountHints(signal: AbortSignal): () => void {
 
   function exit() {
     cancelAnimationFrame(frame);
+    session?.abort();
+    session = null;
     root?.remove();
     root = null;
     hints = [];
@@ -177,7 +171,7 @@ export function mountHints(signal: AbortSignal): () => void {
     exit();
     const targets = collectTargets();
     if (targets.length === 0) return;
-    const labels = makeLabels(targets.length, config.chars);
+    const labels = makeLabels(targets.length, getChars());
     root = document.createElement("div");
     root.setAttribute(ROOT_ATTR, "");
     root.setAttribute("aria-hidden", "true");
@@ -192,6 +186,11 @@ export function mountHints(signal: AbortSignal): () => void {
     });
     document.body.appendChild(root);
     render();
+    session = new AbortController();
+    const { signal } = session;
+    window.addEventListener("resize", scheduleRender, { signal });
+    document.addEventListener("scroll", scheduleRender, { capture: true, passive: true, signal });
+    window.addEventListener("blur", exit, { signal });
   }
 
   // Also runs on scroll and resize: the chat auto-scrolls while an agent
@@ -210,29 +209,22 @@ export function mountHints(signal: AbortSignal): () => void {
   }
 
   function scheduleRender() {
-    if (!root) return;
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(render);
   }
 
-  function swallow(e: KeyboardEvent) {
-    e.preventDefault();
-    e.stopImmediatePropagation();
-  }
-
-  const isAltF = (e: KeyboardEvent) => e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyF";
-
-  function onHintKey(e: KeyboardEvent) {
+  function onKey(e: KeyboardEvent) {
     if (e.key === "Shift" || e.isComposing) return;
     // Let app and OS shortcuts (Cmd+R, Cmd+W...) through.
-    if (e.metaKey || e.ctrlKey) return exit();
-    swallow(e);
+    if (e.metaKey || e.ctrlKey || e.altKey) return exit();
+    e.preventDefault();
+    e.stopImmediatePropagation();
     if (e.key === "Backspace") {
       typed = typed.slice(0, -1);
       return render();
     }
     const ch = e.key.toLowerCase();
-    if (isAltF(e) || e.key === "Escape" || ch.length !== 1 || !config.chars.includes(ch)) return exit();
+    if (ch.length !== 1 || !getChars().includes(ch)) return exit();
     typed += ch;
     const matches = hints.filter((h) => h.label.startsWith(typed));
     if (matches.length === 0) return exit();
@@ -242,31 +234,14 @@ export function mountHints(signal: AbortSignal): () => void {
     activate(exact.el);
   }
 
-  function onKeyDown(e: KeyboardEvent) {
-    if (root) return onHintKey(e);
-    if (e.isComposing) return;
-    const plainF =
-      config.plainF &&
-      e.key === "f" &&
-      !e.altKey &&
-      !e.metaKey &&
-      !e.ctrlKey &&
-      !e.shiftKey &&
-      !isEditable(document.activeElement);
-    if (!isAltF(e) && !plainF) return;
-    swallow(e);
-    enter();
-  }
-
-  // Capture phase on window so bb's own shortcuts never see hint keystrokes.
-  window.addEventListener("keydown", onKeyDown, { capture: true, signal });
-  window.addEventListener("resize", scheduleRender, { signal });
-  document.addEventListener("scroll", scheduleRender, { capture: true, passive: true, signal });
-  window.addEventListener("blur", exit, { signal });
-  document.addEventListener("pointerdown", (e) => root && e.isTrusted && exit(), { capture: true, signal });
-
-  return () => {
-    exit();
-    style.remove();
+  return {
+    active: () => root !== null,
+    enter,
+    exit,
+    onKey,
+    dispose() {
+      exit();
+      style.remove();
+    },
   };
 }

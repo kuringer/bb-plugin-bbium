@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { definePluginApp, useSettings } from "@get-bb/plugin-sdk/app";
-import { config, mountHints, parseChars } from "./hints";
+import { config, mountKeys, parseChars } from "./keys.ts";
 
 // Content scripts get no React context, so this invisible overlay copies the
 // plugin settings into the shared hint config whenever they change.
@@ -8,16 +8,16 @@ function SettingsBridge() {
   const { values } = useSettings();
   useEffect(() => {
     config.chars = parseChars(values?.hintCharacters);
-    config.plainF = values?.plainF !== false;
-  }, [values?.hintCharacters, values?.plainF]);
+    config.enabled = values?.vimKeys !== false;
+  }, [values?.hintCharacters, values?.vimKeys]);
   return null;
 }
 
 export default definePluginApp((app) => {
   app.contentScripts.register({
-    id: "hint-mode",
+    id: "vim-keys",
     mount({ signal }) {
-      return mountHints(signal);
+      return mountKeys(signal);
     },
   });
   app.slots.experimental_appOverlay({ id: "settings-bridge", component: SettingsBridge });

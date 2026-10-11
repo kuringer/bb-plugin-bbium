@@ -1,13 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_CHARS, makeLabels, parseChars, readingOrder } from "./hints.ts";
+import { makeLabels, readingOrder } from "./hints.ts";
+import { DEFAULT_CHARS, parseChars } from "./keys.ts";
 
 const prefixFree = (labels: string[]) =>
   labels.every((a, i) => labels.every((b, j) => i === j || !b.startsWith(a)));
 
 test("makeLabels: unique and prefix-free for many counts", () => {
   for (const n of [1, 2, 13, 14, 15, 40, 69, 196, 197, 500]) {
-    const labels = makeLabels(n);
+    const labels = makeLabels(n, DEFAULT_CHARS);
     assert.equal(labels.length, n);
     assert.equal(new Set(labels).size, n);
     assert.ok(prefixFree(labels), `prefix collision at n=${n}`);
@@ -16,12 +17,12 @@ test("makeLabels: unique and prefix-free for many counts", () => {
 });
 
 test("makeLabels: single characters when targets fit the alphabet", () => {
-  assert.ok(makeLabels(14).every((l) => l.length === 1));
-  assert.deepEqual(makeLabels(0), []);
+  assert.ok(makeLabels(14, DEFAULT_CHARS).every((l) => l.length === 1));
+  assert.deepEqual(makeLabels(0, DEFAULT_CHARS), []);
 });
 
 test("makeLabels: mixes lengths instead of all-two-letter labels", () => {
-  const labels = makeLabels(20);
+  const labels = makeLabels(20, DEFAULT_CHARS);
   assert.ok(labels.some((l) => l.length === 1));
   assert.ok(labels.every((l) => l.length <= 2));
 });

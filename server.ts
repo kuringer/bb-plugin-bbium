@@ -1,13 +1,13 @@
-// bb-plugin-bbium: hint mode lives in the frontend content script (hints.ts).
+// bb-plugin-bbium: keyboard behavior lives in the frontend content script (keys.ts).
 // The server only declares settings; the frontend reads them via useSettings.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 
 export default async function plugin(bb: BbPluginApi) {
   bb.settings.define({
-    plainF: {
+    vimKeys: {
       type: "boolean",
-      label: "Open hints with f",
-      description: "Press f when focus is outside a text field. Alt+F always works, also in the composer.",
+      label: "Vim keys",
+      description: "f hints, j/k and d/u scroll, gg/G top and bottom, i composer. Active when focus is outside a text field (press Esc in the composer).",
       default: true,
     },
     hintCharacters: {
