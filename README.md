@@ -1,6 +1,6 @@
 # Bbium
 
-Vimium-style keyboard hints for [bb](https://getbb.app). Press `f`, type the label next to a button, link, thread or field, and bb clicks it. No mouse.
+Vimium-style keys for [bb](https://getbb.app). Press `f`, type the label next to a button, link, thread or field, and bb clicks it. Scroll with `j`/`k` and `d`/`u`. No mouse.
 
 ## Install
 
@@ -12,21 +12,25 @@ Reload the bb window once after install.
 
 ## Use
 
+Keys work when focus is outside a text field. In the composer, press `Esc` first: bb blurs the composer on Esc and does not stop the agent.
+
 | Key | Action |
 | --- | --- |
-| `f` | Show hints (when focus is not in a text field) |
-| `Alt+F` | Show hints from anywhere, also from the composer |
-| label letters | Click or focus the element |
-| `Backspace` | Remove the last typed letter |
-| `Esc` or `Alt+F` | Close hints |
+| `f` | Show hints, then type a label to click or focus that element |
+| `j` / `k` | Scroll down / up |
+| `d` / `u` | Scroll half a screen down / up |
+| `gg` / `G` | Scroll to top / bottom |
+| `i` | Focus the composer |
 
-Hints follow their targets while the chat scrolls. Text fields get focus instead of a click.
+In hint mode: `Backspace` removes the last typed letter, `Esc` closes hints. Hints follow their targets while the chat scrolls.
+
+Scroll keys move the area you last clicked into, else the largest scrollable area (the chat in a thread).
 
 ## Settings
 
 In bb: Plugins > Bbium.
 
-- **Open hints with f** - turn off if a plain `f` gets in your way. `Alt+F` keeps working.
+- **Vim keys** - turn all keys off.
 - **Hint characters** - letters for labels, home row first. Default `sadfjklewcmpgh`.
 
 ## How it works
@@ -44,7 +48,7 @@ bb plugin dev         # rebuild and reload on save
 npm run verify        # typecheck, tests, build
 ```
 
-Logic: [`hints.ts`](hints.ts). Tests: [`hints.test.ts`](hints.test.ts).
+Logic: [`keys.ts`](keys.ts) (key routing), [`hints.ts`](hints.ts), [`scroll.ts`](scroll.ts). Tests: [`hints.test.ts`](hints.test.ts).
 
 ## License
 

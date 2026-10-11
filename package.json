@@ -1,7 +1,7 @@
 {
   "name": "bb-plugin-bbium",
   "version": "0.1.0",
-  "description": "Vimium-style keyboard hints for bb: press f, type a label, click without the mouse.",
+  "description": "Vimium-style keys for bb: f for click hints, j/k and d/u to scroll, i for the composer.",
   "type": "module",
   "license": "MIT",
   "author": "Andrej Kostal (https://github.com/kuringer)",
@@ -29,7 +29,7 @@
   },
   "bb": {
     "name": "Bbium",
-    "description": "Vimium-style keyboard hints: press f, type a label, click without the mouse.",
+    "description": "Vimium-style keys: f to click by label, j/k and d/u to scroll, i for the composer.",
     "branding": {
       "icon": "Keyboard"
     },
