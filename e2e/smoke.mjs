@@ -2,7 +2,8 @@
 //   BB_URL=http://localhost:38886 npm run e2e
 // BB_THREAD=/projects/<id>/threads/<id> adds scroll checks on a long thread.
 // Uses the system Chrome (playwright-core has no bundled browser).
-// Read-only: it never clicks a button, it only focuses the composer by label.
+// It never clicks a button: it only focuses the composer by label. It types one
+// `f` into the composer and deletes it again.
 import { chromium } from "playwright-core";
 
 const url = process.env.BB_URL ?? "http://localhost:38886";
@@ -23,15 +24,19 @@ const focus = () =>
     const a = document.activeElement;
     return a?.isContentEditable ? "editor" : (a?.tagName.toLowerCase() ?? "none");
   });
+const composerText = () =>
+  page.evaluate(() => [...document.querySelectorAll(".ProseMirror[contenteditable=true]")].at(-1)?.textContent ?? "");
+// bb blurs its composer on Esc; the check fails if that ever changes.
 const leaveEditor = async () => {
   await page.keyboard.press("Escape");
-  await page.evaluate(() => document.activeElement?.blur?.());
+  return (await focus()) !== "editor";
 };
 
 try {
   await page.goto(url, { waitUntil: "networkidle" });
   await page.waitForTimeout(2500);
-  await leaveEditor();
+  await page.keyboard.press("i");
+  check("Esc leaves the composer", await leaveEditor());
 
   await page.keyboard.press("f");
   const count = await hints();
@@ -45,8 +50,11 @@ try {
   await page.keyboard.press("i");
   check("i focuses the composer", (await focus()) === "editor");
 
+  const before = await composerText();
   await page.keyboard.press("f");
-  check("f in the composer types, no hints", (await hints()) === 0);
+  const typed = await composerText();
+  check("f in the composer types, no hints", (await hints()) === 0 && typed === before + "f");
+  if (typed !== before) await page.keyboard.press("Backspace");
 
   // Label of the composer: hints sit at the target's top-left corner.
   await leaveEditor();
@@ -69,9 +77,10 @@ try {
   }
 
   await leaveEditor();
+  const draft = await composerText();
   await page.keyboard.press("g");
   await page.keyboard.press("g");
-  check("gg is handled (no hints, no typing)", (await hints()) === 0 && (await focus()) !== "editor");
+  check("gg is handled, not typed", (await hints()) === 0 && (await composerText()) === draft);
 
   if (process.env.BB_THREAD) {
     await page.goto(new URL(process.env.BB_THREAD, url).href, { waitUntil: "networkidle" });

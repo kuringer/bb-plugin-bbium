@@ -12,8 +12,21 @@ function isScrollable(el: Element): el is HTMLElement {
   return overflow === "auto" || overflow === "scroll" || overflow === "overlay";
 }
 
+/** Visible area of `el` in the viewport (0 = off screen), or 0 when covered. */
+function visibleArea(el: HTMLElement): number {
+  const r = el.getBoundingClientRect();
+  const left = Math.max(r.left, 0);
+  const top = Math.max(r.top, 0);
+  const w = Math.min(r.right, innerWidth) - left;
+  const h = Math.min(r.bottom, innerHeight) - top;
+  if (w <= 0 || h <= 0) return 0;
+  // A modal or another pane on top wins the hit test at the center.
+  const hit = document.elementFromPoint(left + w / 2, top + h / 2);
+  return hit && el.contains(hit) ? w * h : 0;
+}
+
 function usable(el: HTMLElement | null): el is HTMLElement {
-  return !!el && el.isConnected && el.clientHeight > 0 && isScrollable(el);
+  return !!el && el.isConnected && el.clientHeight > 0 && isScrollable(el) && visibleArea(el) > 0;
 }
 
 function scrollableAncestor(el: Element | null): HTMLElement | null {
@@ -28,12 +41,10 @@ function largestScrollable(): HTMLElement | null {
   let bestArea = 0;
   for (const el of document.body.querySelectorAll("*")) {
     if (!isScrollable(el)) continue;
-    const r = el.getBoundingClientRect();
-    const w = Math.min(r.right, innerWidth) - Math.max(r.left, 0);
-    const h = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
-    if (w > 0 && h > 0 && w * h > bestArea) {
+    const area = visibleArea(el);
+    if (area > bestArea) {
       best = el;
-      bestArea = w * h;
+      bestArea = area;
     }
   }
   return best;

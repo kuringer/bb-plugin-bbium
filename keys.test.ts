@@ -38,8 +38,11 @@ test("routeKey: a late second g starts a new gg", () => {
   assert.equal(late.lastG, 1000 + G_TIMEOUT_MS);
 });
 
-test("routeKey: another key cancels a pending g", () => {
+test("routeKey: any other key cancels a pending g, a bare modifier does not", () => {
   assert.equal(routeKey(key("j"), 1000, false).lastG, 0);
+  assert.equal(routeKey(key("Escape"), 1000, false).lastG, 0);
+  assert.equal(routeKey(key("x"), 1000, true).lastG, 0);
+  assert.equal(routeKey(key("Shift"), 1000, false).lastG, 1000);
 });
 
 test("routeKey: ignores text fields, modifiers, IME and unknown keys", () => {
@@ -58,15 +61,30 @@ test("routeKey: ignores text fields, modifiers, IME and unknown keys", () => {
   }
 });
 
-test("pickComposer: ProseMirror beats a lower textarea, lowest editor wins a tie", () => {
+test("pickComposer: ProseMirror first, then nearest to the user, then lowest", () => {
   assert.equal(pickComposer([]), -1);
   assert.equal(
     pickComposer([
-      { isProseMirror: true, bottom: 300 },
-      { isProseMirror: false, bottom: 900 },
-      { isProseMirror: true, bottom: 800 },
+      { isProseMirror: true, nearness: 0, bottom: 300 },
+      { isProseMirror: false, nearness: 0, bottom: 900 },
+      { isProseMirror: true, nearness: 0, bottom: 800 },
     ]),
     2,
   );
-  assert.equal(pickComposer([{ isProseMirror: false, bottom: 100 }]), 0);
+  // Split panes: the composer in the pane the user worked in wins.
+  assert.equal(
+    pickComposer([
+      { isProseMirror: true, nearness: 9, bottom: 800 },
+      { isProseMirror: true, nearness: 4, bottom: 800 },
+    ]),
+    0,
+  );
+  assert.equal(
+    pickComposer([
+      { isProseMirror: false, nearness: 12, bottom: 800 },
+      { isProseMirror: true, nearness: 4, bottom: 800 },
+    ]),
+    1,
+  );
+  assert.equal(pickComposer([{ isProseMirror: false, nearness: 0, bottom: 100 }]), 0);
 });

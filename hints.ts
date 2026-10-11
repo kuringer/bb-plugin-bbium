@@ -63,8 +63,21 @@ function isUncovered(el: HTMLElement, rect: DOMRect): boolean {
   // Occlusion check: a modal or overlay above the element wins the hit test.
   const x = Math.min(Math.max(rect.left + rect.width / 2, 0), innerWidth - 1);
   const y = Math.min(Math.max(rect.top + rect.height / 2, 0), innerHeight - 1);
+  // The hit must land on the element itself: an ancestor hit means the element
+  // is hidden, inert (pointer-events: none) or under a modal backdrop.
   const hit = document.elementFromPoint(x, y);
-  return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
+  return !!hit && el.contains(hit);
+}
+
+function isDisabled(el: HTMLElement): boolean {
+  return (el as HTMLButtonElement).disabled === true || el.getAttribute("aria-disabled") === "true";
+}
+
+/** Still worth clicking: attached, enabled, on screen and not covered. */
+function isLive(el: HTMLElement): boolean {
+  if (!el.isConnected || isDisabled(el)) return false;
+  const rect = el.getBoundingClientRect();
+  return onScreen(rect) && isUncovered(el, rect);
 }
 
 // One pass over the DOM. The cheap geometry check runs first, so
@@ -77,12 +90,13 @@ function collectTargets(): { el: HTMLElement; rect: DOMRect }[] {
     return c;
   };
   const found: { el: HTMLElement; rect: DOMRect }[] = [];
-  for (const el of document.body.querySelectorAll<HTMLElement>("*")) {
-    if (el.hasAttribute(ROOT_ATTR)) continue;
+  for (const el of document.body.querySelectorAll("*")) {
+    // SVG and MathML have no click(); their clickable HTML parent gets the label.
+    if (!(el instanceof HTMLElement) || el.hasAttribute(ROOT_ATTR)) continue;
     const rect = el.getBoundingClientRect();
     if (!onScreen(rect)) continue;
     if (el.matches(CLICKABLE)) {
-      if ((el as HTMLButtonElement).disabled || el.getAttribute("aria-disabled") === "true") continue;
+      if (isDisabled(el)) continue;
     } else {
       // cursor is inherited, so only take the top of each pointer region, and
       // skip regions inside a semantic clickable.
@@ -105,7 +119,8 @@ function sameCorner(a: DOMRect, b: DOMRect): boolean {
 }
 
 function activate(el: HTMLElement): void {
-  if (!el.isConnected) return;
+  // The page may have changed since the labels were drawn.
+  if (!isLive(el)) return;
   if (isEditable(el)) {
     el.focus();
     return;
@@ -130,7 +145,40 @@ function activate(el: HTMLElement): void {
   el.click();
 }
 
-type Hint = { label: string; el: HTMLElement; node: HTMLSpanElement; typed: HTMLSpanElement; rest: HTMLSpanElement };
+type HintKey = Pick<KeyboardEvent, "key" | "repeat" | "isComposing" | "metaKey" | "ctrlKey" | "altKey">;
+
+export type HintStep =
+  | { kind: "pass" } // not ours, hint mode stays (Shift, IME)
+  | { kind: "release" } // close hints and let the key through (app shortcuts)
+  | { kind: "swallow" } // consume, no change (key repeat)
+  | { kind: "exit" } // consume and close (Esc, a non-label key)
+  | { kind: "typed"; typed: string }
+  | { kind: "activate"; label: string };
+
+/** One key in hint mode. `labels` = labels of the targets still on screen. */
+export function hintKey(e: HintKey, typed: string, chars: string, labels: string[]): HintStep {
+  if (e.key === "Shift" || e.isComposing) return { kind: "pass" };
+  // Let app and OS shortcuts (Cmd+R, Cmd+W...) through.
+  if (e.metaKey || e.ctrlKey || e.altKey) return { kind: "release" };
+  // A held `f` repeats: those repeats must not pick a label.
+  if (e.repeat) return { kind: "swallow" };
+  if (e.key === "Backspace") return { kind: "typed", typed: typed.slice(0, -1) };
+  const ch = e.key.toLowerCase();
+  if (ch.length !== 1 || !chars.includes(ch)) return { kind: "exit" };
+  const next = typed + ch;
+  if (labels.includes(next)) return { kind: "activate", label: next };
+  if (labels.some((l) => l.startsWith(next))) return { kind: "typed", typed: next };
+  return { kind: "exit" };
+}
+
+type Hint = {
+  label: string;
+  el: HTMLElement;
+  node: HTMLSpanElement;
+  typed: HTMLSpanElement;
+  rest: HTMLSpanElement;
+  onScreen: boolean;
+};
 
 export type HintMode = {
   active(): boolean;
@@ -172,7 +220,7 @@ export function createHints(getChars: () => string): HintMode {
       typedNode.className = "typed";
       const rest = node.appendChild(document.createElement("span"));
       root!.appendChild(node);
-      return { label: labels[i], el, node, typed: typedNode, rest };
+      return { label: labels[i], el, node, typed: typedNode, rest, onScreen: true };
     });
     document.body.appendChild(root);
     render();
@@ -188,7 +236,8 @@ export function createHints(getChars: () => string): HintMode {
   function render() {
     for (const h of hints) {
       const rect = h.el.getBoundingClientRect();
-      const show = h.el.isConnected && onScreen(rect) && h.label.startsWith(typed);
+      h.onScreen = h.el.isConnected && onScreen(rect);
+      const show = h.onScreen && h.label.startsWith(typed);
       h.node.style.display = show ? "" : "none";
       if (!show) continue;
       h.node.style.left = `${Math.max(rect.left, 0)}px`;
@@ -204,24 +253,22 @@ export function createHints(getChars: () => string): HintMode {
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === "Shift" || e.isComposing) return;
-    // Let app and OS shortcuts (Cmd+R, Cmd+W...) through.
-    if (e.metaKey || e.ctrlKey || e.altKey) return exit();
+    const live = hints.filter((h) => h.onScreen);
+    const step = hintKey(e, typed, getChars(), live.map((h) => h.label));
+    if (step.kind === "pass") return;
+    if (step.kind === "release") return exit();
     e.preventDefault();
     e.stopImmediatePropagation();
-    if (e.key === "Backspace") {
-      typed = typed.slice(0, -1);
+    if (step.kind === "exit") return exit();
+    if (step.kind === "typed") {
+      typed = step.typed;
       return render();
     }
-    const ch = e.key.toLowerCase();
-    if (ch.length !== 1 || !getChars().includes(ch)) return exit();
-    typed += ch;
-    const matches = hints.filter((h) => h.label.startsWith(typed));
-    if (matches.length === 0) return exit();
-    const exact = matches.find((h) => h.label === typed);
-    if (!exact) return render();
-    exit();
-    activate(exact.el);
+    if (step.kind === "activate") {
+      const el = live.find((h) => h.label === step.label)!.el;
+      exit();
+      activate(el);
+    }
   }
 
   return {

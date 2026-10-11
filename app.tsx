@@ -6,7 +6,7 @@ import { createKeys, parseSettings, type Keys } from "./keys.ts";
 // outside route layouts, and has the React context that useSettings needs.
 // It renders nothing; it owns the key handler's lifetime.
 function KeyboardControl() {
-  const { values } = useSettings();
+  const { values, isLoading } = useSettings();
   const keys = useRef<Keys | null>(null);
 
   useEffect(() => {
@@ -18,7 +18,10 @@ function KeyboardControl() {
     };
   }, []);
 
-  useEffect(() => keys.current?.apply(parseSettings(values)), [values]);
+  // Keys stay off while loading; settings that never load fall back to defaults.
+  useEffect(() => {
+    if (!isLoading) keys.current?.apply(parseSettings(values));
+  }, [values, isLoading]);
 
   return null;
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeLabels, readingOrder } from "./hints.ts";
+import { hintKey, makeLabels, readingOrder } from "./hints.ts";
 import { DEFAULT_CHARS, parseChars } from "./keys.ts";
 
 const prefixFree = (labels: string[]) =>
@@ -42,4 +42,39 @@ test("readingOrder: rows top to bottom, then left to right", () => {
     { top: 100, left: 10 },
   ];
   assert.deepEqual(readingOrder(boxes), [2, 1, 3, 0]);
+});
+
+const k = (key: string, extra: Partial<KeyboardEvent> = {}) => ({
+  key,
+  repeat: false,
+  isComposing: false,
+  metaKey: false,
+  ctrlKey: false,
+  altKey: false,
+  ...extra,
+});
+
+test("hintKey: a held f does not pick the label f", () => {
+  assert.deepEqual(hintKey(k("f", { repeat: true }), "", "fj", ["f", "j"]), { kind: "swallow" });
+  assert.deepEqual(hintKey(k("f"), "", "fj", ["f", "j"]), { kind: "activate", label: "f" });
+});
+
+test("hintKey: prefixes, backspace, misses", () => {
+  const labels = ["sa", "sd", "f"];
+  assert.deepEqual(hintKey(k("s"), "", "sadf", labels), { kind: "typed", typed: "s" });
+  assert.deepEqual(hintKey(k("D"), "s", "sadf", labels), { kind: "activate", label: "sd" });
+  assert.deepEqual(hintKey(k("Backspace"), "s", "sadf", labels), { kind: "typed", typed: "" });
+  assert.deepEqual(hintKey(k("s"), "s", "sadf", labels), { kind: "exit" });
+  assert.deepEqual(hintKey(k("x"), "", "sadf", labels), { kind: "exit" });
+  assert.deepEqual(hintKey(k("Escape"), "", "sadf", labels), { kind: "exit" });
+});
+
+test("hintKey: only labels still on screen match", () => {
+  assert.deepEqual(hintKey(k("f"), "", "fj", ["j"]), { kind: "exit" });
+});
+
+test("hintKey: modifiers release, Shift and IME pass", () => {
+  assert.deepEqual(hintKey(k("r", { metaKey: true }), "", "fj", ["f"]), { kind: "release" });
+  assert.deepEqual(hintKey(k("Shift"), "", "fj", ["f"]), { kind: "pass" });
+  assert.deepEqual(hintKey(k("f", { isComposing: true }), "", "fj", ["f"]), { kind: "pass" });
 });

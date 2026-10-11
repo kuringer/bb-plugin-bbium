@@ -40,21 +40,23 @@ export function parseSettings(values: Record<string, unknown> | undefined): Conf
 export type Action = { kind: "hints" } | { kind: "composer" } | { kind: "scroll"; command: ScrollCommand };
 
 const SCROLL_KEYS: Record<string, ScrollCommand> = { j: "down", k: "up", d: "halfDown", u: "halfUp", G: "bottom" };
+const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta", "CapsLock"]);
 
 type KeyInput = Pick<KeyboardEvent, "key" | "altKey" | "metaKey" | "ctrlKey" | "isComposing" | "timeStamp">;
 
 /**
  * Normal-mode routing without DOM access. `lastG` is the timestamp of a
- * pending first `g` (0 = none). `handled` = the key belongs to bbium and must
- * not reach bb or the page.
+ * pending first `g` (0 = none); any other key except a bare modifier cancels
+ * it. `typing` = focus is in a text field or a typeahead popup. `handled` =
+ * the key belongs to bbium and must not reach bb or the page.
  */
 export function routeKey(
   e: KeyInput,
   lastG: number,
-  editable: boolean,
+  typing: boolean,
 ): { action: Action | null; handled: boolean; lastG: number } {
-  const ignore = { action: null, handled: false, lastG };
-  if (editable || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return ignore;
+  const ignore = { action: null, handled: false, lastG: MODIFIER_KEYS.has(e.key) ? lastG : 0 };
+  if (typing || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return ignore;
   if (e.key === "g") {
     if (lastG && e.timeStamp - lastG < G_TIMEOUT_MS) return { action: { kind: "scroll", command: "top" }, handled: true, lastG: 0 };
     return { action: null, handled: true, lastG: e.timeStamp };
@@ -65,57 +67,101 @@ export function routeKey(
   return ignore;
 }
 
-type EditorBox = { isProseMirror: boolean; bottom: number };
+// Open menus and listboxes use letters for typeahead.
+const TYPEAHEAD = "[role=menu],[role=listbox]";
+
+/** Focus is somewhere that consumes letters; looks through shadow roots. */
+function isTyping(e: KeyboardEvent): boolean {
+  const target = e.composedPath()[0];
+  let active = document.activeElement;
+  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+  return [target, active].some((el) => el instanceof Element && (isEditable(el) || !!el.closest(TYPEAHEAD)));
+}
+
+type EditorBox = { isProseMirror: boolean; nearness: number; bottom: number };
 
 /**
- * Index of the composer among visible editors: bb's composer is a ProseMirror
- * editor, so it beats a terminal textarea; the lowest one is the thread
- * composer, inline message editors sit above it.
+ * Index of the composer among visible editors. bb's composer is a ProseMirror
+ * editor, so it beats a terminal textarea. Then the editor nearest to where the
+ * user last worked (depth of the shared ancestor) wins, so split panes focus
+ * their own composer. Then the lowest one: inline message editors sit above
+ * the thread composer.
  */
 export function pickComposer(editors: EditorBox[]): number {
   let best = -1;
   editors.forEach((e, i) => {
     const b = editors[best];
-    if (!b || (e.isProseMirror && !b.isProseMirror) || (e.isProseMirror === b.isProseMirror && e.bottom > b.bottom)) best = i;
+    if (
+      !b ||
+      (e.isProseMirror !== b.isProseMirror ? e.isProseMirror : e.nearness !== b.nearness ? e.nearness > b.nearness : e.bottom > b.bottom)
+    )
+      best = i;
   });
   return best;
 }
 
-function focusComposer(): void {
+function depth(el: Node | null): number {
+  let d = 0;
+  for (let n = el; n; n = n.parentNode) d++;
+  return d;
+}
+
+/** Depth of the deepest ancestor shared by `a` and `b`; 0 without an anchor. */
+function nearness(a: Element, b: Element | null): number {
+  if (!b) return 0;
+  let n: Node | null = a;
+  while (n && !n.contains(b)) n = n.parentNode;
+  return depth(n);
+}
+
+function focusComposer(anchor: Element | null): void {
   const editors = [...document.querySelectorAll<HTMLElement>("[contenteditable=true], textarea")].filter((el) => {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight;
   });
   const i = pickComposer(
-    editors.map((el) => ({ isProseMirror: el.classList.contains("ProseMirror"), bottom: el.getBoundingClientRect().bottom })),
+    editors.map((el) => ({
+      isProseMirror: el.classList.contains("ProseMirror"),
+      nearness: nearness(el, anchor),
+      bottom: el.getBoundingClientRect().bottom,
+    })),
   );
   editors[i]?.focus();
 }
 
 export type Keys = { apply(config: Config): void; dispose(): void };
 
-/** Install the key handler and hint stylesheet in this window. */
+/**
+ * Install the key handler and hint stylesheet in this window. Keys stay off
+ * until the first apply(), so a saved "off" setting holds while settings load.
+ */
 export function createKeys(): Keys {
-  let config = parseSettings(undefined);
+  let config: Config = { ...parseSettings(undefined), enabled: false };
   const hints = createHints(() => config.chars);
   const listeners = new AbortController();
   const style = document.createElement("style");
   style.dataset.bbium = "";
   document.head.appendChild(style);
   let lastG = 0;
+  let lastPointer: Element | null = null;
 
   function onKeyDown(e: KeyboardEvent) {
+    // Any key, ours or native (PageDown, End...), ends a gg hold on the top.
+    cancelPin();
     if (hints.active()) return hints.onKey(e);
     if (!config.enabled) return;
-    const route = routeKey(e, lastG, isEditable(document.activeElement));
+    const route = routeKey(e, lastG, isTyping(e));
     lastG = route.lastG;
     if (!route.handled) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     const action = route.action;
-    if (action?.kind === "hints") hints.enter();
-    else if (action?.kind === "composer") focusComposer();
-    else if (action?.kind === "scroll") scrollBy(action.command, config.scrollStep, e.repeat);
+    if (action?.kind === "hints") {
+      if (!e.repeat) hints.enter();
+    } else if (action?.kind === "composer") {
+      const active = document.activeElement;
+      focusComposer(active && active !== document.body ? active : lastPointer?.isConnected ? lastPointer : null);
+    } else if (action?.kind === "scroll") scrollBy(action.command, config.scrollStep, e.repeat);
   }
 
   function onPointerDown(e: PointerEvent) {
@@ -123,6 +169,7 @@ export function createKeys(): Keys {
     if (!e.isTrusted) return;
     hints.exit();
     cancelPin();
+    lastPointer = e.target instanceof Element ? e.target : null;
     rememberScrollTarget(e.target);
   }
 
@@ -131,14 +178,19 @@ export function createKeys(): Keys {
   }
 
   // Capture phase on window so bb's own shortcuts never see these keystrokes.
-  window.addEventListener("keydown", onKeyDown, { capture: true, signal: listeners.signal });
-  document.addEventListener("pointerdown", onPointerDown, { capture: true, signal: listeners.signal });
-  window.addEventListener("wheel", onWheel, { capture: true, passive: true, signal: listeners.signal });
+  const opts = { capture: true, signal: listeners.signal };
+  window.addEventListener("keydown", onKeyDown, opts);
+  document.addEventListener("pointerdown", onPointerDown, opts);
+  window.addEventListener("wheel", onWheel, { ...opts, passive: true });
+  window.addEventListener("blur", cancelPin, opts);
 
   return {
     apply(next) {
       config = next;
-      if (!config.enabled) hints.exit();
+      if (!config.enabled) {
+        hints.exit();
+        cancelPin();
+      }
       style.textContent = buildCss(config.theme, config.customCss);
     },
     dispose() {
