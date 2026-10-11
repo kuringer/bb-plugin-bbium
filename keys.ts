@@ -194,7 +194,7 @@ export function createKeys(): Keys {
         cancelPin();
         lastG = 0;
       }
-      style.textContent = buildCss(config.theme, config.customCss);
+      style.textContent = buildCss(config.theme, config.customCss, config.enabled);
     },
     dispose() {
       listeners.abort();

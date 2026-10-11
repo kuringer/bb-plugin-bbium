@@ -31,3 +31,8 @@ test("buildCss: custom CSS comes after the theme so it wins", () => {
   assert.ok(css.indexOf("var(--primary") < css.indexOf("--bbium-bg: red"));
   assert.match(css, /\.bbium-hint \.typed/);
 });
+
+test("buildCss: composer insert ring only while vim keys are on", () => {
+  assert.match(buildCss("vimium", "", true), /\[data-promptbox\]:focus-within/);
+  assert.doesNotMatch(buildCss("vimium", "", false), /data-promptbox/);
+});

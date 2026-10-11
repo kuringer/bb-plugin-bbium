@@ -12,15 +12,15 @@ Reload the bb window once after install.
 
 ## Use
 
-Keys work when focus is outside a text field. In the composer, press `Esc` first: bb blurs the composer on Esc and does not stop the agent.
+Keys work when focus is outside a text field. While the composer has focus, it shows a colored ring and an `INSERT · ESC` badge, so you know keys type text there. Press `Esc` first: bb blurs the composer on Esc and does not stop the agent.
 
-| Key | Action |
-| --- | --- |
-| `f` | Show hints, then type a label to click or focus that element |
-| `j` / `k` | Scroll down / up |
-| `d` / `u` | Scroll half a screen down / up |
-| `gg` / `G` | Scroll to top / bottom |
-| `i` | Focus the composer |
+| Key        | Action                                                       |
+| ---------- | ------------------------------------------------------------ |
+| `f`        | Show hints, then type a label to click or focus that element |
+| `j` / `k`  | Scroll down / up                                             |
+| `d` / `u`  | Scroll half a screen down / up                               |
+| `gg` / `G` | Scroll to top / bottom                                       |
+| `i`        | Focus the composer                                           |
 
 In hint mode: `Backspace` removes the last typed letter, `Esc` closes hints. Hints follow their targets while the chat scrolls.
 
@@ -37,13 +37,13 @@ bb plugin config bbium set customCss '[data-bbium-root] { --bbium-font-size: 13p
 
 Changes apply live, no reload.
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `vimKeys` | `true` | Turn all keys on or off |
-| `hintCharacters` | `sadfjklewcmpgh` | Label letters, home row first |
-| `scrollStep` | `70` | Pixels per `j`/`k` |
-| `theme` | `vimium` | `vimium` yellow, `bb` app accent (follows light/dark), `mono` |
-| `customCss` | empty | CSS applied after the theme |
+| Setting          | Default          | Meaning                                                       |
+| ---------------- | ---------------- | ------------------------------------------------------------- |
+| `vimKeys`        | `true`           | Turn all keys on or off                                       |
+| `hintCharacters` | `sadfjklewcmpgh` | Label letters, home row first                                 |
+| `scrollStep`     | `70`             | Pixels per `j`/`k`                                            |
+| `theme`          | `vimium`         | `vimium` yellow, `bb` app accent (follows light/dark), `mono` |
+| `customCss`      | empty            | CSS applied after the theme                                   |
 
 Hint styling uses CSS variables (`--bbium-bg`, `--bbium-fg`, `--bbium-font-size`, `--bbium-offset-y`...) on `[data-bbium-root]`. The full list is in [`skills/bbium/SKILL.md`](skills/bbium/SKILL.md). bb loads that skill for agents, so "make the hints bigger and blue" works in any thread.
 

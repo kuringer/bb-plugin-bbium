@@ -47,6 +47,40 @@ const THEME_VARS: Record<Theme, string> = {
   mono: "--bbium-bg: var(--foreground, #151419); --bbium-fg: var(--background, #fbfaf8); --bbium-border: transparent; --bbium-shadow: none; --bbium-font: var(--font-mono, ui-monospace, monospace);",
 };
 
-export function buildCss(theme: Theme, customCss: string): string {
-  return `${BASE}\n${ROOT} { ${THEME_VARS[theme]} }\n/* Custom CSS */\n${customCss}\n`;
+// Insert mode: while the composer has focus, keys type text and `f` is a
+// letter. A ring and an INSERT badge on the composer make that visible.
+export const COMPOSER = "[data-promptbox]";
+
+const INSERT = `
+${COMPOSER}:focus-within {
+  box-shadow: 0 0 0 var(--bbium-insert-width, 2px) var(--bbium-insert-color) !important;
+}
+${COMPOSER}:focus-within::after {
+  content: var(--bbium-insert-label, "INSERT \\00B7  ESC");
+  display: var(--bbium-insert-badge, block);
+  position: absolute;
+  top: 0;
+  right: 14px;
+  transform: translateY(-50%);
+  padding: 0 6px;
+  border-radius: 4px;
+  font: 600 10px/16px var(--bbium-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+  letter-spacing: .06em;
+  color: var(--bbium-insert-fg);
+  background: var(--bbium-insert-color);
+  pointer-events: none;
+  z-index: 1;
+}
+`;
+
+const INSERT_VARS: Record<Theme, string> = {
+  vimium: "--bbium-insert-color: #e0b400; --bbium-insert-fg: #1a1400;",
+  bb: "--bbium-insert-color: var(--primary, #cc4710); --bbium-insert-fg: var(--primary-foreground, #fff);",
+  mono: "--bbium-insert-color: var(--foreground, #151419); --bbium-insert-fg: var(--background, #fbfaf8);",
+};
+
+/** `enabled` = vim keys on; without them there is no mode to show. */
+export function buildCss(theme: Theme, customCss: string, enabled = true): string {
+  const insert = enabled ? `${INSERT}\n${COMPOSER} { ${INSERT_VARS[theme]} }\n` : "";
+  return `${BASE}\n${ROOT} { ${THEME_VARS[theme]} }\n${insert}/* Custom CSS */\n${customCss}\n`;
 }
