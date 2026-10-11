@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hintKey, makeLabels, readingOrder } from "./hints.ts";
+import { hintKey, labelSpot, makeLabels, readingOrder } from "./hints.ts";
 import { DEFAULT_CHARS, parseChars } from "./keys.ts";
 
 const prefixFree = (labels: string[]) =>
@@ -77,4 +77,14 @@ test("hintKey: modifiers release, Shift and IME pass", () => {
   assert.deepEqual(hintKey(k("r", { metaKey: true }), "", "fj", ["f"]), { kind: "release" });
   assert.deepEqual(hintKey(k("Shift"), "", "fj", ["f"]), { kind: "pass" });
   assert.deepEqual(hintKey(k("f", { isComposing: true }), "", "fj", ["f"]), { kind: "pass" });
+});
+
+test("labelSpot: text targets keep the corner, icons get the label above or below", () => {
+  const r = (top: number, left: number, size = 24) => ({ top, left, width: size, height: size, bottom: top + size });
+  assert.deepEqual(labelSpot(r(100, -5, 200), false), { x: 0, y: 100, mode: "corner" });
+  assert.deepEqual(labelSpot(r(100, 50), true), { x: 62, y: 98, mode: "above" });
+  // No room above: below the icon.
+  assert.deepEqual(labelSpot(r(8, 50), true), { x: 62, y: 34, mode: "below" });
+  // The centered label must not leave the left edge.
+  assert.equal(labelSpot(r(100, 0, 10), true).x, 12);
 });

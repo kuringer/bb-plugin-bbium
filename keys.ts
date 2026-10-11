@@ -112,7 +112,16 @@ function focusComposer(anchor: Element | null): void {
       return { isProseMirror: el.classList.contains("ProseMirror"), inColumn: x >= r.left && x <= r.right, bottom: r.bottom };
     }),
   );
-  editors[i]?.focus();
+  const editor = editors[i];
+  if (!editor) return;
+  editor.focus();
+  // A plain DOM focus puts the caret at the start of a saved draft; continue typing at the end.
+  if (editor instanceof HTMLTextAreaElement) editor.setSelectionRange(editor.value.length, editor.value.length);
+  else {
+    const sel = getSelection();
+    sel?.selectAllChildren(editor);
+    sel?.collapseToEnd();
+  }
 }
 
 export type Keys = { apply(config: Config): void; dispose(): void };

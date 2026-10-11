@@ -29,6 +29,28 @@ export function readingOrder(boxes: Box[]): number[] {
   return boxes.map((_, i) => i).sort((a, b) => row(boxes[a]) - row(boxes[b]) || boxes[a].left - boxes[b].left);
 }
 
+type Rect = { top: number; left: number; width: number; height: number; bottom: number };
+export type Spot = { x: number; y: number; mode: "corner" | "above" | "below" };
+
+// Room for one label row above a target (11px font, line-height 1.3, padding, border).
+const LABEL_ROOM = 20;
+
+/**
+ * Where a label goes. A label on the corner of a small icon button covers the
+ * whole icon, so icon-only targets get the label centered above them (below
+ * when there is no room at the top) and the icon stays visible.
+ */
+export function labelSpot(rect: Rect, iconOnly: boolean): Spot {
+  if (!iconOnly) return { x: Math.max(rect.left, 0), y: Math.max(rect.top, 0), mode: "corner" };
+  const x = Math.max(rect.left + rect.width / 2, 12);
+  if (rect.top - 2 >= LABEL_ROOM) return { x, y: rect.top - 2, mode: "above" };
+  return { x, y: rect.bottom + 2, mode: "below" };
+}
+
+function isIconOnly(el: HTMLElement, rect: DOMRect): boolean {
+  return rect.width <= 48 && rect.height <= 48 && !isEditable(el) && !el.textContent?.trim();
+}
+
 // Semantic clickables. React handlers on plain divs are invisible to the DOM,
 // so collectTargets also adds the outermost `cursor: pointer` elements.
 const CLICKABLE = [
@@ -118,6 +140,29 @@ function sameCorner(a: DOMRect, b: DOMRect): boolean {
   return Math.abs(a.left - b.left) < 3 && Math.abs(a.top - b.top) < 3;
 }
 
+// Hover-only controls (message actions, sidebar row actions) sit in an
+// `opacity: 0` wrapper. They pass the hit test, so they get a label, but the
+// user cannot see what the label does. Show them while hints are open.
+function revealHidden(els: HTMLElement[]): () => void {
+  const saved: { el: HTMLElement; value: string; priority: string }[] = [];
+  const checked = new Set<Element>();
+  for (const start of els) {
+    // Ancestors above an already checked element are checked too.
+    for (let el: HTMLElement | null = start; el && el !== document.body && !checked.has(el); el = el.parentElement) {
+      checked.add(el);
+      if (parseFloat(getComputedStyle(el).opacity) >= 0.1) continue;
+      saved.push({ el, value: el.style.getPropertyValue("opacity"), priority: el.style.getPropertyPriority("opacity") });
+      el.style.setProperty("opacity", "1", "important");
+    }
+  }
+  return () => {
+    for (const { el, value, priority } of saved) {
+      if (value) el.style.setProperty("opacity", value, priority);
+      else el.style.removeProperty("opacity");
+    }
+  };
+}
+
 function activate(el: HTMLElement): void {
   // The page may have changed since the labels were drawn.
   if (!isLive(el)) return;
@@ -178,6 +223,7 @@ type Hint = {
   typed: HTMLSpanElement;
   rest: HTMLSpanElement;
   onScreen: boolean;
+  iconOnly: boolean;
 };
 
 export type HintMode = {
@@ -194,9 +240,12 @@ export function createHints(getChars: () => string): HintMode {
   let hints: Hint[] = [];
   let typed = "";
   let frame = 0;
+  let unreveal: (() => void) | null = null;
 
   function exit() {
     cancelAnimationFrame(frame);
+    unreveal?.();
+    unreveal = null;
     session?.abort();
     session = null;
     root?.remove();
@@ -209,18 +258,19 @@ export function createHints(getChars: () => string): HintMode {
     exit();
     const targets = collectTargets();
     if (targets.length === 0) return;
+    unreveal = revealHidden(targets.map((t) => t.el));
     const labels = makeLabels(targets.length, getChars());
     root = document.createElement("div");
     root.setAttribute(ROOT_ATTR, "");
     root.setAttribute("aria-hidden", "true");
-    hints = targets.map(({ el }, i) => {
+    hints = targets.map(({ el, rect }, i) => {
       const node = document.createElement("span");
       node.className = "bbium-hint";
       const typedNode = node.appendChild(document.createElement("span"));
       typedNode.className = "typed";
       const rest = node.appendChild(document.createElement("span"));
       root!.appendChild(node);
-      return { label: labels[i], el, node, typed: typedNode, rest, onScreen: true };
+      return { label: labels[i], el, node, typed: typedNode, rest, onScreen: true, iconOnly: isIconOnly(el, rect) };
     });
     document.body.appendChild(root);
     render();
@@ -240,8 +290,10 @@ export function createHints(getChars: () => string): HintMode {
       const show = h.onScreen && h.label.startsWith(typed);
       h.node.style.display = show ? "" : "none";
       if (!show) continue;
-      h.node.style.left = `${Math.max(rect.left, 0)}px`;
-      h.node.style.top = `${Math.max(rect.top, 0)}px`;
+      const spot = labelSpot(rect, h.iconOnly);
+      h.node.className = spot.mode === "corner" ? "bbium-hint" : `bbium-hint ${spot.mode}`;
+      h.node.style.left = `${spot.x}px`;
+      h.node.style.top = `${spot.y}px`;
       h.typed.textContent = typed;
       h.rest.textContent = h.label.slice(typed.length);
     }

@@ -34,6 +34,12 @@ ${ROOT} .bbium-hint {
   opacity: var(--bbium-opacity, 1);
   white-space: nowrap;
 }
+${ROOT} .bbium-hint.above {
+  transform: translate(calc(-50% + var(--bbium-offset-x, 0px)), calc(-100% + var(--bbium-offset-y, 0px)));
+}
+${ROOT} .bbium-hint.below {
+  transform: translate(calc(-50% + var(--bbium-offset-x, 0px)), var(--bbium-offset-y, 0px));
+}
 ${ROOT} .bbium-hint .typed { opacity: var(--bbium-typed-opacity, .35); }
 `;
 

@@ -35,6 +35,8 @@ const leaveEditor = async () => {
 try {
   await page.goto(url, { waitUntil: "networkidle" });
   await page.waitForTimeout(2500);
+  // bb may autofocus the composer on load; a bare `i` would then land in the draft.
+  await page.evaluate(() => document.activeElement?.blur?.());
   await page.keyboard.press("i");
   check("Esc leaves the composer", await leaveEditor());
 
@@ -43,6 +45,10 @@ try {
   check("f shows hints", count > 0, `${count} labels`);
   await page.keyboard.press("Escape");
   check("Esc closes hints", (await hints()) === 0);
+  const revealed = await page.evaluate(
+    () => [...document.querySelectorAll("*")].filter((e) => e.style.getPropertyPriority("opacity") === "important").length,
+  );
+  check("hover-only controls are hidden again", revealed === 0, `${revealed} still shown`);
 
   await page.keyboard.press("Alt+KeyF");
   check("Alt+F is not handled", (await hints()) === 0);
@@ -59,7 +65,7 @@ try {
     // Focus is still in the composer: remove the test `f` from the real draft.
     await page.keyboard.press("Backspace");
   }
-  check("f in the composer types, no hints", (await hints()) === 0 && typed === before + "f");
+  check("f in the composer types, no hints", (await hints()) === 0 && typed === before + "f", JSON.stringify({ before, typed, h: await hints() }));
 
   // Label of the composer: hints sit at the target's top-left corner.
   await leaveEditor();
