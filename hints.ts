@@ -1,12 +1,50 @@
 // Vimium-style hint mode for the bb app shell.
 //
-// Trigger: `f` when focus is not in an editable field, or Alt+F from anywhere
-// (the composer usually holds focus, so a plain `f` would be typed there).
-// Then type the label shown next to an element to click or focus it.
-// Esc or any key that is not a label character cancels.
+// Trigger: `f` when focus is not in a text field (can be turned off), or
+// Alt+F from anywhere - the composer usually holds focus, so a plain `f`
+// would be typed there. Then type the label next to an element to click or
+// focus it. Esc, Alt+F again, or a key that is not a label character cancels.
 
-const ALPHABET = "sadfjklewcmpgh";
+export const DEFAULT_CHARS = "sadfjklewcmpgh";
 const ROOT_ATTR = "data-bbium-root";
+
+export type HintConfig = { chars: string; plainF: boolean };
+
+// Read by the key handler on every keystroke; app.tsx updates it from settings.
+export const config: HintConfig = { chars: DEFAULT_CHARS, plainF: true };
+
+/** Lowercase, unique a-z characters; falls back to the default below 2. */
+export function parseChars(raw: unknown): string {
+  if (typeof raw !== "string") return DEFAULT_CHARS;
+  const unique = [...new Set(raw.toLowerCase().replace(/[^a-z]/g, ""))].join("");
+  return unique.length >= 2 ? unique : DEFAULT_CHARS;
+}
+
+/**
+ * Prefix-free labels with the shortest mix of lengths (Vimium's algorithm):
+ * with 14 characters and 20 targets, most labels stay one character long.
+ */
+export function makeLabels(count: number, chars = DEFAULT_CHARS): string[] {
+  if (count <= 0) return [];
+  const hints = [""];
+  let offset = 0;
+  while (hints.length - offset < count || hints.length === 1) {
+    const hint = hints[offset++];
+    for (const ch of chars) hints.push(ch + hint);
+  }
+  return hints
+    .slice(offset, offset + count)
+    .sort()
+    .map((h) => [...h].reverse().join(""));
+}
+
+type Box = { top: number; left: number };
+
+/** Reading order: rows of ~12px, then left to right. Returns indices. */
+export function readingOrder(boxes: Box[]): number[] {
+  const row = (b: Box) => Math.round(b.top / 12);
+  return boxes.map((_, i) => i).sort((a, b) => row(boxes[a]) - row(boxes[b]) || boxes[a].left - boxes[b].left);
+}
 
 // Semantic clickables. React handlers on plain divs are invisible to the DOM,
 // so collectTargets also adds the outermost `cursor: pointer` elements.
@@ -23,38 +61,23 @@ const CLICKABLE = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
-export function makeLabels(count: number, alphabet = ALPHABET): string[] {
-  if (count <= 0) return [];
-  let length = 1;
-  while (alphabet.length ** length < count) length++;
-  const labels: string[] = [];
-  for (let i = 0; i < count; i++) {
-    let n = i;
-    let label = "";
-    for (let j = 0; j < length; j++) {
-      label = alphabet[n % alphabet.length] + label;
-      n = Math.floor(n / alphabet.length);
-    }
-    labels.push(label);
-  }
-  return labels;
-}
-
 function isEditable(el: Element | null): boolean {
-  if (!el || !(el instanceof HTMLElement)) return false;
+  if (!(el instanceof HTMLElement)) return false;
   if (el.isContentEditable) return true;
-  const tag = el.tagName;
-  if (tag === "TEXTAREA" || tag === "SELECT") return true;
-  if (tag === "INPUT") {
+  if (el.tagName === "TEXTAREA" || el.tagName === "SELECT") return true;
+  if (el.tagName === "INPUT") {
     const type = (el as HTMLInputElement).type;
     return !["button", "submit", "reset", "checkbox", "radio", "range", "color", "file"].includes(type);
   }
   return false;
 }
 
+function onScreen(rect: DOMRect): boolean {
+  return rect.width >= 2 && rect.height >= 2 && rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth;
+}
+
 function isVisible(el: HTMLElement, rect: DOMRect): boolean {
-  if (rect.width < 2 || rect.height < 2) return false;
-  if (rect.bottom <= 0 || rect.right <= 0 || rect.top >= innerHeight || rect.left >= innerWidth) return false;
+  if (!onScreen(rect)) return false;
   // Occlusion check: a modal or overlay above the element wins the hit test.
   const x = Math.min(Math.max(rect.left + rect.width / 2, 0), innerWidth - 1);
   const y = Math.min(Math.max(rect.top + rect.height / 2, 0), innerHeight - 1);
@@ -76,25 +99,25 @@ function collectTargets(): HTMLElement[] {
     if (getComputedStyle(el).cursor !== "pointer") continue;
     const parent = el.parentElement;
     if (parent && getComputedStyle(parent).cursor === "pointer") continue;
-    if (el.parentElement?.closest(CLICKABLE)) continue;
+    if (parent?.closest(CLICKABLE)) continue;
     found.add(el);
   }
-  const visible: HTMLElement[] = [];
-  for (const el of found) {
-    if (isVisible(el, el.getBoundingClientRect())) visible.push(el);
-  }
-  // Drop a semantic wrapper whose only visible child target sits at the same
-  // spot (e.g. <a><button/></a>) to avoid two stacked labels.
-  return visible.filter((el) => !visible.some((other) => other !== el && el.contains(other) && sameBox(el, other)));
+  const visible = [...found].filter((el) => isVisible(el, el.getBoundingClientRect()));
+  // Drop a wrapper that starts at the same spot as a target inside it
+  // (e.g. <a><button/></a>) to avoid two stacked labels.
+  const deduped = visible.filter((el) => !visible.some((other) => other !== el && el.contains(other) && sameCorner(el, other)));
+  const order = readingOrder(deduped.map((el) => el.getBoundingClientRect()));
+  return order.map((i) => deduped[i]);
 }
 
-function sameBox(a: HTMLElement, b: HTMLElement): boolean {
+function sameCorner(a: HTMLElement, b: HTMLElement): boolean {
   const ra = a.getBoundingClientRect();
   const rb = b.getBoundingClientRect();
   return Math.abs(ra.left - rb.left) < 3 && Math.abs(ra.top - rb.top) < 3;
 }
 
 function activate(el: HTMLElement): void {
+  if (!el.isConnected) return;
   if (isEditable(el)) {
     el.focus();
     return;
@@ -130,16 +153,20 @@ const STYLE = `
 [${ROOT_ATTR}] .bbium-hint .typed { opacity: .35; }
 `;
 
+type Hint = { label: string; el: HTMLElement; node: HTMLSpanElement; typed: HTMLSpanElement; rest: HTMLSpanElement };
+
 export function mountHints(signal: AbortSignal): () => void {
   let root: HTMLDivElement | null = null;
-  let hints: { label: string; el: HTMLElement; node: HTMLSpanElement }[] = [];
+  let hints: Hint[] = [];
   let typed = "";
+  let frame = 0;
 
   const style = document.createElement("style");
   style.textContent = STYLE;
   document.head.appendChild(style);
 
   function exit() {
+    cancelAnimationFrame(frame);
     root?.remove();
     root = null;
     hints = [];
@@ -150,28 +177,42 @@ export function mountHints(signal: AbortSignal): () => void {
     exit();
     const targets = collectTargets();
     if (targets.length === 0) return;
-    const labels = makeLabels(targets.length);
+    const labels = makeLabels(targets.length, config.chars);
     root = document.createElement("div");
     root.setAttribute(ROOT_ATTR, "");
+    root.setAttribute("aria-hidden", "true");
     hints = targets.map((el, i) => {
-      const rect = el.getBoundingClientRect();
       const node = document.createElement("span");
       node.className = "bbium-hint";
-      node.style.left = `${Math.max(rect.left, 0)}px`;
-      node.style.top = `${Math.max(rect.top, 0)}px`;
-      node.textContent = labels[i];
+      const typedNode = node.appendChild(document.createElement("span"));
+      typedNode.className = "typed";
+      const rest = node.appendChild(document.createElement("span"));
       root!.appendChild(node);
-      return { label: labels[i], el, node };
+      return { label: labels[i], el, node, typed: typedNode, rest };
     });
     document.body.appendChild(root);
+    render();
   }
 
+  // Also runs on scroll and resize: the chat auto-scrolls while an agent
+  // works, so hints follow their targets instead of closing.
   function render() {
     for (const h of hints) {
-      const match = h.label.startsWith(typed);
-      h.node.style.display = match ? "" : "none";
-      if (match) h.node.innerHTML = `<span class="typed">${typed}</span>${h.label.slice(typed.length)}`;
+      const rect = h.el.getBoundingClientRect();
+      const show = h.el.isConnected && onScreen(rect) && h.label.startsWith(typed);
+      h.node.style.display = show ? "" : "none";
+      if (!show) continue;
+      h.node.style.left = `${Math.max(rect.left, 0)}px`;
+      h.node.style.top = `${Math.max(rect.top, 0)}px`;
+      h.typed.textContent = typed;
+      h.rest.textContent = h.label.slice(typed.length);
     }
+  }
+
+  function scheduleRender() {
+    if (!root) return;
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(render);
   }
 
   function swallow(e: KeyboardEvent) {
@@ -179,48 +220,50 @@ export function mountHints(signal: AbortSignal): () => void {
     e.stopImmediatePropagation();
   }
 
-  function onKeyDown(e: KeyboardEvent) {
-    if (root) {
-      if (e.key === "Shift") return;
-      swallow(e);
-      if (e.key === "Backspace") {
-        typed = typed.slice(0, -1);
-        render();
-        return;
-      }
-      const ch = e.key.toLowerCase();
-      if (e.key === "Escape" || ch.length !== 1 || !ALPHABET.includes(ch)) return exit();
-      typed += ch;
-      const matches = hints.filter((h) => h.label.startsWith(typed));
-      if (matches.length === 0) return exit();
-      const exact = matches.find((h) => h.label === typed);
-      if (exact) {
-        const el = exact.el;
-        exit();
-        activate(el);
-        return;
-      }
-      render();
-      return;
-    }
+  const isAltF = (e: KeyboardEvent) => e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyF";
 
-    const altF = e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyF";
+  function onHintKey(e: KeyboardEvent) {
+    if (e.key === "Shift" || e.isComposing) return;
+    // Let app and OS shortcuts (Cmd+R, Cmd+W...) through.
+    if (e.metaKey || e.ctrlKey) return exit();
+    swallow(e);
+    if (e.key === "Backspace") {
+      typed = typed.slice(0, -1);
+      return render();
+    }
+    const ch = e.key.toLowerCase();
+    if (isAltF(e) || e.key === "Escape" || ch.length !== 1 || !config.chars.includes(ch)) return exit();
+    typed += ch;
+    const matches = hints.filter((h) => h.label.startsWith(typed));
+    if (matches.length === 0) return exit();
+    const exact = matches.find((h) => h.label === typed);
+    if (!exact) return render();
+    exit();
+    activate(exact.el);
+  }
+
+  function onKeyDown(e: KeyboardEvent) {
+    if (root) return onHintKey(e);
+    if (e.isComposing) return;
     const plainF =
-      e.key === "f" && !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && !isEditable(document.activeElement);
-    if (!altF && !plainF) return;
+      config.plainF &&
+      e.key === "f" &&
+      !e.altKey &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.shiftKey &&
+      !isEditable(document.activeElement);
+    if (!isAltF(e) && !plainF) return;
     swallow(e);
     enter();
   }
 
-  const onScrollOrResize = () => {
-    if (root) exit();
-  };
-
   // Capture phase on window so bb's own shortcuts never see hint keystrokes.
   window.addEventListener("keydown", onKeyDown, { capture: true, signal });
-  window.addEventListener("resize", onScrollOrResize, { signal });
-  document.addEventListener("scroll", onScrollOrResize, { capture: true, passive: true, signal });
+  window.addEventListener("resize", scheduleRender, { signal });
+  document.addEventListener("scroll", scheduleRender, { capture: true, passive: true, signal });
   window.addEventListener("blur", exit, { signal });
+  document.addEventListener("pointerdown", (e) => root && e.isTrusted && exit(), { capture: true, signal });
 
   return () => {
     exit();

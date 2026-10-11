@@ -14,11 +14,13 @@
       "node"
     ],
     "noEmit": true,
-    "skipLibCheck": false
+    "skipLibCheck": false,
+    "allowImportingTsExtensions": true
   },
   "include": [
     "server.ts",
     "app.tsx",
-    "hints.ts"
+    "hints.ts",
+    "hints.test.ts"
   ]
 }
