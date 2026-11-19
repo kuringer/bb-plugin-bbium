@@ -221,10 +221,17 @@ function collectTargets(): { el: HTMLElement; rect: DOMRect }[] {
     for (const child of el.children) visit(child, childClip, pointer, inClickable || clickable);
   };
   for (const child of document.body.children) visit(child, viewport, false, false);
+  // Prefer the sortable row when both it and its thread link are available.
+  const elements = new Set<Element>(found.map(({ el }) => el));
+  const targets = found.filter(({ el }) => {
+    if (!el.matches("a[href][data-sidebar-thread-id]")) return true;
+    const row = el.closest('[data-sidebar-rename-row][role="button"][aria-roledescription="sortable"]');
+    return !row || !elements.has(row);
+  });
   // Drop a wrapper that starts at the same spot as a target inside it
   // (e.g. <a><button/></a>) to avoid two stacked labels.
-  const deduped = found.filter(
-    (a) => !found.some((b) => b !== a && a.el.contains(b.el) && sameCorner(a.rect, b.rect)),
+  const deduped = targets.filter(
+    (a) => !targets.some((b) => b !== a && a.el.contains(b.el) && sameCorner(a.rect, b.rect)),
   );
   return readingOrder(deduped.map((t) => t.rect)).map((i) => deduped[i]);
 }
@@ -402,7 +409,7 @@ export function createHints(getChars: () => string): HintMode {
   // Also runs on scroll and resize: the chat auto-scrolls while an agent
   // works, so hints follow their targets instead of closing.
   function render() {
-    const live: { h: Hint; spot: Spot }[] = [];
+    const live: { h: Hint; spot: Spot; rect: DOMRect }[] = [];
     for (const h of hints) {
       const rect = h.el.isConnected ? visibleRect(h.el) : null;
       h.onScreen = rect !== null;
@@ -410,7 +417,7 @@ export function createHints(getChars: () => string): HintMode {
       h.node.style.display = show ? "" : "none";
       if (!rect) continue;
       const spot = labelSpot(rect, h.iconOnly);
-      live.push({ h, spot });
+      live.push({ h, spot, rect });
       if (!show) continue;
       h.node.className = spot.mode === "corner" ? "bbium-hint" : `bbium-hint ${spot.mode}`;
       h.node.style.left = `${spot.x}px`;
@@ -425,13 +432,46 @@ export function createHints(getChars: () => string): HintMode {
       const r = h.node.getBoundingClientRect();
       h.size = { ox: r.left - spot.x, oy: r.top - spot.y, w: r.width, h: r.height };
     }
-    const sized = live.flatMap(({ h, spot }) => (h.size ? [{ h, spot, size: h.size }] : []));
+    const sized = live.flatMap(({ h, spot, rect }) => (h.size ? [{ h, spot, rect, size: h.size }] : []));
     const boxes = sized.map(({ spot, size }) => ({ left: spot.x + size.ox, top: spot.y + size.oy, width: size.w, height: size.h }));
+    // Anchor the buttons in each message toolbar as a row. The scroll viewport
+    // ends above the composer and can differ between open thread panels.
+    const rows = new Map<Element, { buttons: number[]; top: number; bottom: number; limit: number }>();
+    sized.forEach(({ h, rect }) => {
+      if (h.el.getAttribute("aria-label") !== "Copy message") return;
+      const column = h.el.closest("[data-message-column]");
+      const toolbar = h.el.parentElement;
+      if (!column || !toolbar) return;
+      const buttons = sized.flatMap(({ h: other }, j) => (other.iconOnly && toolbar.contains(other.el) ? [j] : []));
+      if (!buttons.length) return;
+      const viewport = column.closest("[data-page-scroll-viewport]")?.getBoundingClientRect();
+      rows.set(column, {
+        buttons,
+        top: Math.min(rect.top, ...buttons.map((j) => sized[j].rect.top)),
+        bottom: Math.max(rect.bottom, ...buttons.map((j) => sized[j].rect.bottom)),
+        limit: Math.min(innerHeight, viewport?.bottom ?? innerHeight),
+      });
+    });
+    const gap = 2;
+    for (const row of rows.values()) {
+      if (row.bottom + gap + Math.max(...row.buttons.map((j) => boxes[j].height)) > row.limit) continue;
+      for (const j of row.buttons) boxes[j].top = row.bottom + gap;
+    }
+    sized.forEach(({ h, rect }, i) => {
+      if (!h.el.matches("a[href]")) return;
+      const column = h.el.closest("[data-message-column]");
+      const row = column && rows.get(column);
+      if (!row || rect.bottom > row.top + gap || row.top - rect.bottom > boxes[i].height) return;
+      const above = rect.top - boxes[i].height - gap;
+      const viewportTop = column?.closest("[data-page-scroll-viewport]")?.getBoundingClientRect().top ?? 0;
+      if (above >= Math.max(0, viewportTop)) boxes[i].top = above;
+    });
     const moves = spreadLabels(boxes, { width: innerWidth, height: innerHeight });
     sized.forEach(({ h, spot }, i) => {
-      if (!moves[i].dx && !moves[i].dy) return;
+      const dy = boxes[i].top - (spot.y + sized[i].size.oy) + moves[i].dy;
+      if (!moves[i].dx && !dy) return;
       h.node.style.left = `${spot.x + moves[i].dx}px`;
-      h.node.style.top = `${spot.y + moves[i].dy}px`;
+      h.node.style.top = `${spot.y + dy}px`;
     });
   }
 
